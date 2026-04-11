@@ -1,0 +1,5 @@
+{
+  "name": "SmashTrack",
+  "description": "A professional live badminton scoring and tournament management platform with real-time umpire controls and audience views.",
+  "requestFramePermissions": ["camera"]
+}

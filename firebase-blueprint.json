@@ -1,0 +1,125 @@
+{
+  "entities": {
+    "Tournament": {
+      "title": "Tournament",
+      "description": "A badminton tournament organized by a user.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the tournament" },
+        "organizerId": { "type": "string", "description": "UID of the organizer" },
+        "date": { "type": "string", "format": "date", "description": "Tournament date" },
+        "venue": { "type": "string", "description": "Tournament venue" },
+        "numCourts": { "type": "number", "description": "Number of courts available" },
+        "courtNames": { "type": "object", "description": "Custom names for courts" },
+        "pin": { "type": "string", "description": "Legacy access PIN" },
+        "umpirePin": { "type": "string", "description": "Access PIN for umpires" },
+        "audiencePin": { "type": "string", "description": "Access PIN for audience" },
+        "logoUrl": { "type": "string", "description": "URL for tournament logo or banner" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "organizerId", "umpirePin", "audiencePin"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "A specific match in a tournament.",
+      "type": "object",
+      "properties": {
+        "tournamentId": { "type": "string" },
+        "courtNumber": { "type": "number" },
+        "player1": { "type": "string" },
+        "player2": { "type": "string" },
+        "player1Id": { "type": "string" },
+        "player2Id": { "type": "string" },
+        "score1": { "type": "number" },
+        "score2": { "type": "number" },
+        "status": { "type": "string", "enum": ["scheduled", "ongoing", "completed"] },
+        "umpireId": { "type": "string" },
+        "umpireName": { "type": "string" },
+        "isDoubles": { "type": "boolean" },
+        "server": { "type": "string", "description": "Current server (e.g., 'p1', 'p2')" },
+        "sets": { "type": "array", "description": "Scores for each set" }
+      },
+      "required": ["tournamentId", "status"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "A registered player for a tournament.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "category": { "type": "string", "enum": ["singles", "doubles", "mixed"] },
+        "stats": { "type": "object" }
+      },
+      "required": ["name", "tournamentId", "category"]
+    },
+    "Umpire": {
+      "title": "Umpire",
+      "description": "A registered umpire for a tournament.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "tournamentId": { "type": "string" }
+      },
+      "required": ["name", "tournamentId"]
+    },
+    "License": {
+      "title": "License",
+      "description": "A license for an organizer to use the system.",
+      "type": "object",
+      "properties": {
+        "organizerEmail": { "type": "string" },
+        "accessPin": { "type": "string" },
+        "type": { "type": "string", "enum": ["1day", "multi", "monthly", "annual"] },
+        "validUntil": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "expired", "pending"] },
+        "usedByUid": { "type": "string" }
+      },
+      "required": ["organizerEmail", "accessPin", "type", "validUntil", "status"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "A user of the application.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["superadmin", "organizer", "user"] },
+        "licenseId": { "type": "string" },
+        "licenseValidUntil": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/tournaments/{tournamentId}": {
+      "schema": "Tournament",
+      "description": "Tournament details"
+    },
+    "/tournaments/{tournamentId}/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Matches within a tournament"
+    },
+    "/tournaments/{tournamentId}/umpires/{umpireId}": {
+      "schema": "Umpire",
+      "description": "Umpires registered for a tournament"
+    },
+    "/tournaments/{tournamentId}/players/{playerId}": {
+      "schema": "Player",
+      "description": "Players registered for a tournament"
+    },
+    "/licenses/{licenseId}": {
+      "schema": "License",
+      "description": "System licenses for organizers"
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "Application users"
+    },
+    "/mail/{mailId}": {
+      "schema": "object",
+      "description": "Email queue for Firebase Trigger Email extension"
+    }
+  }
+}

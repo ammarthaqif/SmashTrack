@@ -1,0 +1,331 @@
+import * as React from 'react';
+import { useState, useEffect } from 'react';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, getDocs, where } from 'firebase/firestore';
+import { License, AppUser } from '../types';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Badge } from './ui/badge';
+import { Shield, Key, Users, Calendar, Plus, Search, CheckCircle, XCircle, Clock, Filter } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+
+export default function SuperadminDashboard() {
+  const [licenses, setLicenses] = useState<License[]>([]);
+  const [users, setUsers] = useState<AppUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'licenses' | 'users' | 'overview'>('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    const unsubLicenses = onSnapshot(collection(db, 'licenses'), (snapshot) => {
+      setLicenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as License)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'licenses'));
+
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as AppUser)));
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
+
+    setLoading(false);
+    return () => {
+      unsubLicenses();
+      unsubUsers();
+    };
+  }, []);
+
+  const generateLicense = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const type = formData.get('type') as License['type'];
+    
+    let days = 1;
+    if (type === 'multi') days = 7;
+    if (type === 'monthly') days = 30;
+    if (type === 'annual') days = 365;
+
+    const validUntil = new Date();
+    validUntil.setDate(validUntil.getDate() + days);
+
+    const newLicense: Omit<License, 'id'> = {
+      organizerEmail: email,
+      accessPin: Math.random().toString(36).substring(2, 8).toUpperCase(),
+      type,
+      validUntil: validUntil.toISOString(),
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    const licenseRef = await addDoc(collection(db, 'licenses'), newLicense);
+
+    // Send email via Firebase Trigger Email extension
+    await addDoc(collection(db, 'mail'), {
+      to: email,
+      message: {
+        subject: 'Welcome to SmashTrack - Your Organizer Activation PIN',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
+            <h1 style="color: #2563eb; font-size: 24px; font-weight: 800; margin-bottom: 16px;">Welcome to SmashTrack!</h1>
+            <p style="color: #475569; font-size: 16px; line-height: 1.5;">You have been invited to organize tournaments on SmashTrack. To get started, please use the activation PIN below.</p>
+            
+            <div style="background-color: #f8fafc; padding: 24px; border-radius: 8px; text-align: center; margin: 24px 0;">
+              <p style="text-transform: uppercase; font-size: 12px; font-weight: 700; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Your Activation PIN</p>
+              <p style="font-family: monospace; font-size: 32px; font-weight: 900; color: #2563eb; letter-spacing: 0.2em; margin: 0;">${newLicense.accessPin}</p>
+            </div>
+
+            <p style="color: #475569; font-size: 16px; line-height: 1.5;">Click the link below to log in and enter your PIN:</p>
+            
+            <a href="${window.location.origin}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 16px;">Go to SmashTrack Dashboard</a>
+            
+            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
+            
+            <p style="color: #94a3b8; font-size: 12px;">This license is a <strong>${type}</strong> subscription and is valid until ${validUntil.toLocaleDateString()}.</p>
+          </div>
+        `
+      }
+    });
+
+    (e.target as HTMLFormElement).reset();
+  };
+
+  const filteredLicenses = licenses.filter(l => 
+    l.organizerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    l.accessPin.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const filteredUsers = users.filter(u => 
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  if (loading) return <div className="p-8 text-center">Loading System Management...</div>;
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-6 space-y-8">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+            <Shield className="w-8 h-8 text-blue-600" />
+            System Control
+          </h1>
+          <p className="text-slate-500">Manage licenses, organizers, and system health</p>
+        </div>
+        <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+          <Button 
+            variant={activeTab === 'overview' ? 'default' : 'ghost'} 
+            onClick={() => setActiveTab('overview')}
+            className="rounded-lg"
+          >Overview</Button>
+          <Button 
+            variant={activeTab === 'licenses' ? 'default' : 'ghost'} 
+            onClick={() => setActiveTab('licenses')}
+            className="rounded-lg"
+          >Licenses</Button>
+          <Button 
+            variant={activeTab === 'users' ? 'default' : 'ghost'} 
+            onClick={() => setActiveTab('users')}
+            className="rounded-lg"
+          >Organizers</Button>
+        </div>
+      </header>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'overview' && (
+          <motion.div 
+            key="overview"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          >
+            <Card className="border-none shadow-sm bg-blue-600 text-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-blue-100 uppercase tracking-wider">Total Organizers</CardTitle>
+                <div className="text-4xl font-black">{users.filter(u => u.role === 'organizer').length}</div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-blue-100 text-xs">
+                  <Users className="w-4 h-4" />
+                  Active system users
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm bg-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-400 uppercase tracking-wider">Active Licenses</CardTitle>
+                <div className="text-4xl font-black text-slate-900">{licenses.filter(l => l.status === 'active').length}</div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-slate-500 text-xs">
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  Currently valid access
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-none shadow-sm bg-white">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-400 uppercase tracking-wider">Pending Activation</CardTitle>
+                <div className="text-4xl font-black text-slate-900">{licenses.filter(l => l.status === 'pending').length}</div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 text-slate-500 text-xs">
+                  <Clock className="w-4 h-4 text-orange-500" />
+                  Awaiting organizer login
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="md:col-span-2 border-none shadow-sm bg-white">
+              <CardHeader>
+                <CardTitle>Recent License Activity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {licenses.slice(0, 5).map(l => (
+                    <div key={l.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-white p-2 rounded-lg shadow-sm">
+                          <Key className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-slate-900">{l.organizerEmail}</p>
+                          <p className="text-[10px] text-slate-500 uppercase font-medium">{l.type} License</p>
+                        </div>
+                      </div>
+                      <Badge variant={l.status === 'active' ? 'default' : 'secondary'}>{l.status}</Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-sm bg-white">
+              <CardHeader>
+                <CardTitle>Quick Generate</CardTitle>
+                <CardDescription>Issue a new access PIN</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={generateLicense} className="space-y-4">
+                  <Input name="email" placeholder="Organizer Email" required />
+                  <select name="type" className="w-full h-10 px-3 rounded-md border border-slate-200 text-sm">
+                    <option value="1day">1 Day Access</option>
+                    <option value="multi">7 Days Access</option>
+                    <option value="monthly">Monthly Subscription</option>
+                    <option value="annual">Annual Subscription</option>
+                  </select>
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
+                    <Plus className="w-4 h-4 mr-2" /> Generate PIN
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'licenses' && (
+          <motion.div 
+            key="licenses"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <Search className="w-5 h-5 text-slate-400" />
+              <Input 
+                placeholder="Search by email or PIN..." 
+                className="border-none shadow-none focus-visible:ring-0"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <Card className="border-none shadow-sm overflow-hidden bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead>Organizer Email</TableHead>
+                    <TableHead>Access PIN</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Valid Until</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredLicenses.map((l) => (
+                    <TableRow key={l.id}>
+                      <TableCell className="font-medium">{l.organizerEmail}</TableCell>
+                      <TableCell><code className="bg-slate-100 px-2 py-1 rounded font-bold text-blue-600">{l.accessPin}</code></TableCell>
+                      <TableCell className="capitalize">{l.type}</TableCell>
+                      <TableCell className="text-slate-500 text-xs">
+                        {new Date(l.validUntil).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={l.status === 'active' ? 'default' : l.status === 'expired' ? 'destructive' : 'secondary'}>
+                          {l.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'users' && (
+          <motion.div 
+            key="users"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <Search className="w-5 h-5 text-slate-400" />
+              <Input 
+                placeholder="Search organizers..." 
+                className="border-none shadow-none focus-visible:ring-0"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <Card className="border-none shadow-sm overflow-hidden bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>License ID</TableHead>
+                    <TableHead>Validity</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((u) => (
+                    <TableRow key={u.uid}>
+                      <TableCell className="font-medium">{u.email}</TableCell>
+                      <TableCell>
+                        <Badge variant={u.role === 'superadmin' ? 'destructive' : 'default'}>
+                          {u.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 font-mono">{u.licenseId || 'None'}</TableCell>
+                      <TableCell className="text-xs">
+                        {u.licenseValidUntil ? (
+                          <span className={new Date(u.licenseValidUntil) < new Date() ? 'text-red-500 font-bold' : 'text-green-600'}>
+                            {new Date(u.licenseValidUntil).toLocaleDateString()}
+                          </span>
+                        ) : 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
