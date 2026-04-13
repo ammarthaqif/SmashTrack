@@ -118,7 +118,7 @@ const LoginView = ({
                   className="space-y-6"
                 >
                   <Button 
-                    onClick={onLogin} 
+                    onClick={() => { console.log("Organizer Login button clicked"); onLogin(); }} 
                     className="w-full h-12 text-lg font-medium bg-slate-900 hover:bg-slate-800 transition-all"
                   >
                     <LogIn className="mr-2 h-5 w-5" /> Organizer Login
@@ -501,14 +501,17 @@ export default function App() {
   }, [selectedTournament]);
 
   const handleLogin = async () => {
+    console.log("handleLogin triggered");
     const provider = new GoogleAuthProvider();
     try {
-      console.log("Starting login...");
+      console.log("Attempting signInWithPopup...");
       const result = await signInWithPopup(auth, provider);
-      console.log("Login successful:", result.user.email);
+      console.log("signInWithPopup successful:", result.user.email);
+      addNotification("Login successful!", "success");
     } catch (error: any) {
-      console.error("Login failed", error);
-      alert(`Login failed: ${error.message || "Unknown error"}. Please ensure popups are allowed.`);
+      console.error("Login failed details:", error);
+      addNotification(`Login failed: ${error.message || "Unknown error"}`, "warning");
+      alert(`Login failed: ${error.message || "Unknown error"}. Please ensure popups are allowed and you are not in an incognito window that blocks third-party cookies.`);
     }
   };
 

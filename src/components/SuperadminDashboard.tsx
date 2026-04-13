@@ -19,13 +19,22 @@ export default function SuperadminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    console.log("SuperadminDashboard: Setting up listeners...");
     const unsubLicenses = onSnapshot(collection(db, 'licenses'), (snapshot) => {
+      console.log(`SuperadminDashboard: Received ${snapshot.docs.length} licenses`);
       setLicenses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as License)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'licenses'));
+    }, (error) => {
+      console.error("SuperadminDashboard: License fetch error", error);
+      handleFirestoreError(error, OperationType.LIST, 'licenses');
+    });
 
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      console.log(`SuperadminDashboard: Received ${snapshot.docs.length} users`);
       setUsers(snapshot.docs.map(doc => ({ ...doc.data() } as AppUser)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'users'));
+    }, (error) => {
+      console.error("SuperadminDashboard: User fetch error", error);
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
 
     setLoading(false);
     return () => {
@@ -36,57 +45,67 @@ export default function SuperadminDashboard() {
 
   const generateLicense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    console.log("SuperadminDashboard: Generating license...");
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const type = formData.get('type') as License['type'];
     
-    let days = 1;
-    if (type === 'multi') days = 7;
-    if (type === 'monthly') days = 30;
-    if (type === 'annual') days = 365;
+    try {
+      let days = 1;
+      if (type === 'multi') days = 7;
+      if (type === 'monthly') days = 30;
+      if (type === 'annual') days = 365;
 
-    const validUntil = new Date();
-    validUntil.setDate(validUntil.getDate() + days);
+      const validUntil = new Date();
+      validUntil.setDate(validUntil.getDate() + days);
 
-    const newLicense: Omit<License, 'id'> = {
-      organizerEmail: email,
-      accessPin: Math.random().toString(36).substring(2, 8).toUpperCase(),
-      type,
-      validUntil: validUntil.toISOString(),
-      createdAt: new Date().toISOString(),
-      status: 'pending'
-    };
+      const newLicense: Omit<License, 'id'> = {
+        organizerEmail: email,
+        accessPin: Math.random().toString(36).substring(2, 8).toUpperCase(),
+        type,
+        validUntil: validUntil.toISOString(),
+        createdAt: new Date().toISOString(),
+        status: 'pending'
+      };
 
-    const licenseRef = await addDoc(collection(db, 'licenses'), newLicense);
+      console.log("SuperadminDashboard: Adding license to Firestore...", newLicense);
+      const licenseRef = await addDoc(collection(db, 'licenses'), newLicense);
+      console.log("SuperadminDashboard: License added with ID:", licenseRef.id);
 
-    // Send email via Firebase Trigger Email extension
-    await addDoc(collection(db, 'mail'), {
-      to: email,
-      message: {
-        subject: 'Welcome to SmashTrack - Your Organizer Activation PIN',
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
-            <h1 style="color: #2563eb; font-size: 24px; font-weight: 800; margin-bottom: 16px;">Welcome to SmashTrack!</h1>
-            <p style="color: #475569; font-size: 16px; line-height: 1.5;">You have been invited to organize tournaments on SmashTrack. To get started, please use the activation PIN below.</p>
-            
-            <div style="background-color: #f8fafc; padding: 24px; border-radius: 8px; text-align: center; margin: 24px 0;">
-              <p style="text-transform: uppercase; font-size: 12px; font-weight: 700; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Your Activation PIN</p>
-              <p style="font-family: monospace; font-size: 32px; font-weight: 900; color: #2563eb; letter-spacing: 0.2em; margin: 0;">${newLicense.accessPin}</p>
+      // Send email via Firebase Trigger Email extension
+      console.log("SuperadminDashboard: Adding mail to Firestore...");
+      await addDoc(collection(db, 'mail'), {
+        to: email,
+        message: {
+          subject: 'Welcome to SmashTrack - Your Organizer Activation PIN',
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px;">
+              <h1 style="color: #2563eb; font-size: 24px; font-weight: 800; margin-bottom: 16px;">Welcome to SmashTrack!</h1>
+              <p style="color: #475569; font-size: 16px; line-height: 1.5;">You have been invited to organize tournaments on SmashTrack. To get started, please use the activation PIN below.</p>
+              
+              <div style="background-color: #f8fafc; padding: 24px; border-radius: 8px; text-align: center; margin: 24px 0;">
+                <p style="text-transform: uppercase; font-size: 12px; font-weight: 700; color: #94a3b8; letter-spacing: 0.1em; margin-bottom: 8px;">Your Activation PIN</p>
+                <p style="font-family: monospace; font-size: 32px; font-weight: 900; color: #2563eb; letter-spacing: 0.2em; margin: 0;">${newLicense.accessPin}</p>
+              </div>
+
+              <p style="color: #475569; font-size: 16px; line-height: 1.5;">Click the link below to log in and enter your PIN:</p>
+              
+              <a href="${window.location.origin}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 16px;">Go to SmashTrack Dashboard</a>
+              
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
+              
+              <p style="color: #94a3b8; font-size: 12px;">This license is a <strong>${type}</strong> subscription and is valid until ${validUntil.toLocaleDateString()}.</p>
             </div>
+          `
+        }
+      });
+      console.log("SuperadminDashboard: Mail added successfully");
 
-            <p style="color: #475569; font-size: 16px; line-height: 1.5;">Click the link below to log in and enter your PIN:</p>
-            
-            <a href="${window.location.origin}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 16px;">Go to SmashTrack Dashboard</a>
-            
-            <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
-            
-            <p style="color: #94a3b8; font-size: 12px;">This license is a <strong>${type}</strong> subscription and is valid until ${validUntil.toLocaleDateString()}.</p>
-          </div>
-        `
-      }
-    });
-
-    (e.target as HTMLFormElement).reset();
+      (e.target as HTMLFormElement).reset();
+    } catch (error) {
+      console.error("SuperadminDashboard: Error generating license", error);
+      alert("Failed to generate license. Check console for details.");
+    }
   };
 
   const filteredLicenses = licenses.filter(l => 
