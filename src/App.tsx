@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { GoogleAuthProvider, signInWithPopup, onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, limit, getDoc } from 'firebase/firestore';
@@ -19,6 +18,61 @@ import { cn } from './lib/utils';
 import UmpireScoring from './components/UmpireScoring';
 import AudienceView from './components/AudienceView';
 import SuperadminDashboard from './components/SuperadminDashboard';
+
+// --- Error Boundary ---
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+}
+
+class ErrorBoundary extends Component<any, any> {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+          <Card className="max-w-md w-full border-red-100 shadow-xl">
+            <CardHeader className="text-center">
+              <div className="mx-auto bg-red-100 p-3 rounded-full w-fit mb-4">
+                <Trophy className="w-8 h-8 text-red-600 rotate-180" />
+              </div>
+              <CardTitle className="text-red-900">Something went wrong</CardTitle>
+              <CardDescription>
+                The application encountered an unexpected error.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-lg text-xs font-mono overflow-auto max-h-40">
+                {this.state.error?.message || String(this.state.error)}
+              </div>
+              <Button 
+                className="w-full bg-slate-900" 
+                onClick={() => window.location.reload()}
+              >
+                Reload Application
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+    return (this as any).props.children;
+  }
+}
 
 // --- Components ---
 
@@ -135,6 +189,7 @@ const LoginView = ({
 };
 
 const LandingView = ({ onStart }: { onStart: () => void }) => {
+  console.log("LandingView rendered");
   return (
     <div className="min-h-screen bg-white font-sans selection:bg-blue-100 selection:text-blue-600">
       {/* Navigation */}
@@ -149,7 +204,7 @@ const LandingView = ({ onStart }: { onStart: () => void }) => {
           <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
             <a href="#features" className="hover:text-blue-600 transition-colors">Features</a>
             <a href="#pricing" className="hover:text-blue-600 transition-colors">Pricing</a>
-            <Button onClick={onStart} className="bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-100 px-8 rounded-full">
+            <Button onClick={() => { console.log("Nav button clicked"); onStart(); }} className="bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-100 px-8 rounded-full">
               Launch Dashboard
             </Button>
           </div>
@@ -191,7 +246,7 @@ const LandingView = ({ onStart }: { onStart: () => void }) => {
             transition={{ delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
           >
-            <Button onClick={onStart} size="lg" className="h-16 px-10 text-lg font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl shadow-2xl shadow-blue-200">
+            <Button onClick={() => { console.log("Hero button clicked"); onStart(); }} size="lg" className="h-16 px-10 text-lg font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl shadow-2xl shadow-blue-200">
               Get Started for Free
             </Button>
             <Button variant="outline" size="lg" className="h-16 px-10 text-lg font-bold border-slate-200 rounded-2xl">
@@ -343,7 +398,9 @@ export default function App() {
   };
 
   useEffect(() => {
+    console.log("Setting up auth listener...");
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      console.log("Auth state changed:", u?.email || "No user");
       setUser(u);
       if (u) {
         try {
@@ -351,26 +408,36 @@ export default function App() {
           
           if (!userSnap.empty) {
             const data = userSnap.docs[0].data() as AppUser;
+            console.log("User data found:", data.role);
             setAppUser(data);
             // Only auto-redirect if they are stuck on login or if they are superadmin
             if (data.role === 'superadmin') setView('superadmin');
             else {
-              // We don't force setView('organizer') here because it might interrupt 
-              // a user who just logged in but wants to stay on the current page
-              // However, if they were on the login page, we should take them to the dashboard
-              setView(prev => prev === 'login' ? 'organizer' : prev);
+              setView(prev => {
+                if (prev === 'login') {
+                  console.log("Redirecting from login to organizer");
+                  return 'organizer';
+                }
+                return prev;
+              });
             }
           } else {
+            console.log("New user detected, creating profile with 7-day trial...");
             const isDefaultAdmin = u.email === 'ammarthaqif.ar@gmail.com';
+            const trialExpiry = new Date();
+            trialExpiry.setDate(trialExpiry.getDate() + 7);
+            
             const newUser: AppUser = {
               uid: u.uid,
               email: u.email || '',
-              role: isDefaultAdmin ? 'superadmin' : 'user'
+              role: isDefaultAdmin ? 'superadmin' : 'organizer', // Default to organizer for trial
+              licenseValidUntil: trialExpiry.toISOString()
             };
             await setDoc(doc(db, 'users', u.uid), newUser);
             setAppUser(newUser);
             if (isDefaultAdmin) setView('superadmin');
             else setView('organizer');
+            addNotification("Welcome to SmashTrack! You have a 7-day free trial.", "success");
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -380,14 +447,17 @@ export default function App() {
         setAppUser(null);
         // Only redirect to landing if they are in a view that REQUIRES auth
         setView(prev => {
-          if (prev === 'organizer' || prev === 'superadmin') return 'landing';
+          if (prev === 'organizer' || prev === 'superadmin') {
+            console.log("User logged out, redirecting to landing");
+            return 'landing';
+          }
           return prev;
         });
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []); // Removed view from dependencies
+  }, []);
 
   useEffect(() => {
     if (!user || view !== 'organizer') return;
@@ -443,11 +513,13 @@ export default function App() {
   };
 
   const handleJoinByPin = async (pin: string) => {
+    console.log("handleJoinByPin called with PIN:", pin);
     // Check umpire PIN
     const qUmpire = query(collection(db, 'tournaments'), where('umpirePin', '==', pin), limit(1));
     const snapUmpire = await getDocs(qUmpire);
     if (!snapUmpire.empty) {
       const t = { id: snapUmpire.docs[0].id, ...snapUmpire.docs[0].data() } as Tournament;
+      console.log("Umpire PIN matched tournament:", t.name);
       setSelectedTournament(t);
       setView('umpire');
       return;
@@ -458,6 +530,7 @@ export default function App() {
     const snapAudience = await getDocs(qAudience);
     if (!snapAudience.empty) {
       const t = { id: snapAudience.docs[0].id, ...snapAudience.docs[0].data() } as Tournament;
+      console.log("Audience PIN matched tournament:", t.name);
       setSelectedTournament(t);
       setView('audience');
       return;
@@ -468,10 +541,12 @@ export default function App() {
     const snapLegacy = await getDocs(qLegacy);
     if (!snapLegacy.empty) {
       const t = { id: snapLegacy.docs[0].id, ...snapLegacy.docs[0].data() } as Tournament;
+      console.log("Legacy PIN matched tournament:", t.name);
       setTempTournament(t);
       return;
     }
 
+    console.warn("Invalid PIN entered:", pin);
     alert("Invalid PIN. Please check the PIN and try again.");
   };
 
@@ -673,211 +748,237 @@ export default function App() {
     }
   };
 
+  const handleStart = () => {
+    console.log("handleStart called. User:", user?.email, "Current View:", view);
+    if (user) {
+      console.log("User is logged in, navigating to organizer");
+      setView('organizer');
+    } else {
+      console.log("User is not logged in, navigating to login");
+      setView('login');
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-screen font-mono text-slate-400">Loading SmashTrack...</div>;
 
-  if (view === 'landing') {
-    return <LandingView onStart={() => {
-      if (user) setView('organizer');
-      else setView('login');
-    }} />;
-  }
+  const renderView = () => {
+    if (view === 'landing') {
+      return <LandingView onStart={handleStart} />;
+    }
 
-  if (view === 'superadmin') {
-    return <SuperadminDashboard />;
-  }
+    if (view === 'superadmin') {
+      return <SuperadminDashboard />;
+    }
 
-  if (view === 'login' && !user) {
+    if (view === 'login' && !user) {
+      return (
+        <LoginView 
+          onLogin={handleLogin} 
+          onJoin={handleJoinByPin} 
+          tempTournament={tempTournament}
+          onSelectRole={(role) => {
+            setSelectedTournament(tempTournament);
+            setView(role);
+            setTempTournament(null);
+          }}
+          onCancelJoin={() => setTempTournament(null)}
+        />
+      );
+    }
+
+    if (view === 'audience' && selectedTournament) {
+      return <AudienceView tournamentId={selectedTournament.id!} onBack={() => { setView('login'); setSelectedTournament(null); }} />;
+    }
+
+    if (activeMatchId && selectedTournament) {
+      return <UmpireScoring matchId={activeMatchId} tournamentId={selectedTournament.id!} onExit={() => setActiveMatchId(null)} />;
+    }
+
+    const isLicenseValid = appUser?.role === 'superadmin' || (appUser?.role === 'organizer' && appUser.licenseValidUntil && new Date(appUser.licenseValidUntil) > new Date());
+
     return (
-      <LoginView 
-        onLogin={handleLogin} 
-        onJoin={handleJoinByPin} 
-        tempTournament={tempTournament}
-        onSelectRole={(role) => {
-          setSelectedTournament(tempTournament);
-          setView(role);
-          setTempTournament(null);
-        }}
-        onCancelJoin={() => setTempTournament(null)}
-      />
-    );
-  }
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+        {/* Notifications Overlay */}
+        <div className="fixed bottom-4 right-4 z-[100] space-y-2 pointer-events-none">
+          <AnimatePresence>
+            {notifications.map(n => (
+              <motion.div
+                key={n.id}
+                initial={{ opacity: 0, x: 50, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className={cn(
+                  "p-4 rounded-xl shadow-lg border pointer-events-auto min-w-[300px] max-w-md flex items-start gap-3",
+                  n.type === 'success' ? "bg-green-50 border-green-100 text-green-800" :
+                  n.type === 'warning' ? "bg-yellow-50 border-yellow-100 text-yellow-800" :
+                  "bg-white border-slate-200 text-slate-800"
+                )}
+              >
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{n.message}</p>
+                  <p className="text-[10px] opacity-50 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
 
-  if (view === 'audience' && selectedTournament) {
-    return <AudienceView tournamentId={selectedTournament.id!} onBack={() => { setView('login'); setSelectedTournament(null); }} />;
-  }
-
-  if (activeMatchId && selectedTournament) {
-    return <UmpireScoring matchId={activeMatchId} tournamentId={selectedTournament.id!} onExit={() => setActiveMatchId(null)} />;
-  }
-
-  const isLicenseValid = appUser?.role === 'superadmin' || (appUser?.role === 'organizer' && appUser.licenseValidUntil && new Date(appUser.licenseValidUntil) > new Date());
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      {/* Notifications Overlay */}
-      <div className="fixed bottom-4 right-4 z-[100] space-y-2 pointer-events-none">
-        <AnimatePresence>
-          {notifications.map(n => (
-            <motion.div
-              key={n.id}
-              initial={{ opacity: 0, x: 50, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className={cn(
-                "p-4 rounded-xl shadow-lg border pointer-events-auto min-w-[300px] max-w-md flex items-start gap-3",
-                n.type === 'success' ? "bg-green-50 border-green-100 text-green-800" :
-                n.type === 'warning' ? "bg-yellow-50 border-yellow-100 text-yellow-800" :
-                "bg-white border-slate-200 text-slate-800"
-              )}
-            >
-              <div className="flex-1">
-                <p className="text-sm font-medium">{n.message}</p>
-                <p className="text-[10px] opacity-50 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p>
+        {/* Header */}
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedTournament(null)}>
+              <div className="bg-blue-600 p-1.5 rounded-lg">
+                <Trophy className="w-5 h-5 text-white" />
               </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSelectedTournament(null)}>
-            <div className="bg-blue-600 p-1.5 rounded-lg">
-              <Trophy className="w-5 h-5 text-white" />
+              <span className="font-bold text-xl tracking-tight">SmashTrack</span>
             </div>
-            <span className="font-bold text-xl tracking-tight">SmashTrack</span>
+            <div className="flex items-center gap-4">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
+                  <Button variant="ghost" size="sm" onClick={() => auth.signOut()}>
+                    <LogOut className="w-4 h-4 mr-2" /> Sign Out
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => setView('login')}>Login</Button>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-4">
-            {user ? (
-              <div className="flex items-center gap-3">
-                <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
-                <Button variant="ghost" size="sm" onClick={() => auth.signOut()}>
-                  <LogOut className="w-4 h-4 mr-2" /> Sign Out
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 py-8">
+          {pinPrompt && (
+            <Dialog open={!!pinPrompt} onOpenChange={() => setPinPrompt(null)}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Authentication Required</DialogTitle>
+                  <CardDescription>Enter the tournament PIN to access the organizer dashboard for "{pinPrompt.t.name}"</CardDescription>
+                </DialogHeader>
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  const pin = new FormData(e.currentTarget).get('pin') as string;
+                  if (pin === pinPrompt.t.pin) {
+                    pinPrompt.callback();
+                  } else {
+                    alert("Incorrect PIN");
+                  }
+                }} className="space-y-4 pt-4">
+                  <Input name="pin" placeholder="Enter PIN" className="text-center text-2xl tracking-widest font-mono uppercase" required />
+                  <Button type="submit" className="w-full">Authenticate</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {!isLicenseValid && view === 'organizer' ? (
+            <LicenseActivationView onActivate={activateLicense} />
+          ) : !selectedTournament ? (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-slate-900">Your Tournaments</h1>
+                  <p className="text-slate-500">Manage and track your badminton events</p>
+                </div>
+                <Button onClick={() => setView('organizer')} className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100">
+                  <Plus className="w-4 h-4 mr-2" /> New Tournament
                 </Button>
               </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setView('login')}>Login</Button>
-            )}
-          </div>
-        </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {pinPrompt && (
-          <Dialog open={!!pinPrompt} onOpenChange={() => setPinPrompt(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Authentication Required</DialogTitle>
-                <CardDescription>Enter the tournament PIN to access the organizer dashboard for "{pinPrompt.t.name}"</CardDescription>
-              </DialogHeader>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const pin = new FormData(e.currentTarget).get('pin') as string;
-                if (pin === pinPrompt.t.pin) {
-                  pinPrompt.callback();
-                } else {
-                  alert("Incorrect PIN");
-                }
-              }} className="space-y-4 pt-4">
-                <Input name="pin" placeholder="Enter PIN" className="text-center text-2xl tracking-widest font-mono uppercase" required />
-                <Button type="submit" className="w-full">Authenticate</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
-
-        {!isLicenseValid && view === 'organizer' ? (
-          <LicenseActivationView onActivate={activateLicense} />
-        ) : !selectedTournament ? (
-          <div className="space-y-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">Your Tournaments</h1>
-                <p className="text-slate-500">Manage and track your badminton events</p>
-              </div>
-              <Button onClick={() => setView('organizer')} className="bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100">
-                <Plus className="w-4 h-4 mr-2" /> New Tournament
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tournaments.map((t) => (
-                <Card key={t.id} className="group hover:shadow-xl transition-all border-slate-200 overflow-hidden cursor-pointer" onClick={() => selectTournamentAsOrganizer(t)}>
-                  <div className="h-2 bg-blue-600" />
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">{t.name}</CardTitle>
-                      <Badge variant="secondary" className="font-mono">{t.pin}</Badge>
-                    </div>
-                    <CardDescription>{t.venue} • {t.date}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center gap-4 text-sm text-slate-500">
-                      <div className="flex items-center gap-1"><Monitor className="w-4 h-4" /> {t.numCourts} Courts</div>
-                      <div className="flex items-center gap-1"><Users className="w-4 h-4" /> {matches.length} Matches</div>
-                    </div>
-                  </CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {tournaments.map((t) => (
+                  <Card key={t.id} className="group hover:shadow-xl transition-all border-slate-200 overflow-hidden cursor-pointer" onClick={() => selectTournamentAsOrganizer(t)}>
+                    <div className="h-2 bg-blue-600" />
+                    <CardHeader>
+                      <div className="flex justify-between items-start">
+                        <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">{t.name}</CardTitle>
+                        <Badge variant="secondary" className="font-mono">{t.pin}</Badge>
+                      </div>
+                      <CardDescription>{t.venue} • {t.date}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-4 text-sm text-slate-500">
+                        <div className="flex items-center gap-1"><Monitor className="w-4 h-4" /> {t.numCourts} Courts</div>
+                        <div className="flex items-center gap-1"><Users className="w-4 h-4" /> {matches.length} Matches</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                
+                <Card className="border-dashed border-2 border-slate-200 flex flex-col items-center justify-center p-8 text-slate-400 hover:border-blue-400 hover:text-blue-400 transition-all cursor-pointer bg-transparent">
+                  <Plus className="w-12 h-12 mb-2" />
+                  <p className="font-medium">Create New Tournament</p>
                 </Card>
-              ))}
-              
-              <Card className="border-dashed border-2 border-slate-200 flex flex-col items-center justify-center p-8 text-slate-400 hover:border-blue-400 hover:text-blue-400 transition-all cursor-pointer bg-transparent">
-                <Plus className="w-12 h-12 mb-2" />
-                <p className="font-medium">Create New Tournament</p>
+              </div>
+
+              {/* Create Tournament Form (Modal-like) */}
+              <Card className="max-w-2xl mx-auto border-slate-200">
+                <CardHeader>
+                  <CardTitle>Quick Setup</CardTitle>
+                  <CardDescription>Fill in the details to launch your tournament</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={createTournament} className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2 space-y-2">
+                      <label className="text-sm font-medium">Tournament Name</label>
+                      <Input name="name" placeholder="e.g. Summer Open 2026" required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Date</label>
+                      <Input name="date" type="date" required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Venue</label>
+                      <Input name="venue" placeholder="City Sports Center" required />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Number of Courts</label>
+                      <Input name="courts" type="number" min="1" defaultValue="4" required />
+                    </div>
+                    <div className="col-span-2 pt-4">
+                      <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">Create Tournament</Button>
+                    </div>
+                  </form>
+                </CardContent>
               </Card>
             </div>
+          ) : (
+            <TournamentDashboard 
+              tournament={selectedTournament} 
+              matches={matches} 
+              players={players}
+              umpires={umpires}
+              onBack={() => setSelectedTournament(null)} 
+              onUmpireMatch={(id) => setActiveMatchId(id)}
+              onCreateMatch={createMatch}
+              onRegisterPlayer={registerPlayer}
+              onImportPlayers={importPlayers}
+              onRegisterUmpire={registerUmpire}
+              onToggleUmpireAvailability={toggleUmpireAvailability}
+              onRenameCourt={renameCourt}
+              onAutoSchedule={() => autoSchedule(selectedTournament.id!)}
+              addNotification={addNotification}
+            />
+          )}
+        </main>
+      </div>
+    );
+  };
 
-            {/* Create Tournament Form (Modal-like) */}
-            <Card className="max-w-2xl mx-auto border-slate-200">
-              <CardHeader>
-                <CardTitle>Quick Setup</CardTitle>
-                <CardDescription>Fill in the details to launch your tournament</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={createTournament} className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Tournament Name</label>
-                    <Input name="name" placeholder="e.g. Summer Open 2026" required />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Date</label>
-                    <Input name="date" type="date" required />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Venue</label>
-                    <Input name="venue" placeholder="City Sports Center" required />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Number of Courts</label>
-                    <Input name="courts" type="number" min="1" defaultValue="4" required />
-                  </div>
-                  <div className="col-span-2 pt-4">
-                    <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">Create Tournament</Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        ) : (
-          <TournamentDashboard 
-            tournament={selectedTournament} 
-            matches={matches} 
-            players={players}
-            umpires={umpires}
-            onBack={() => setSelectedTournament(null)} 
-            onUmpireMatch={(id) => setActiveMatchId(id)}
-            onCreateMatch={createMatch}
-            onRegisterPlayer={registerPlayer}
-            onImportPlayers={importPlayers}
-            onRegisterUmpire={registerUmpire}
-            onToggleUmpireAvailability={toggleUmpireAvailability}
-            onRenameCourt={renameCourt}
-            onAutoSchedule={() => autoSchedule(selectedTournament.id!)}
-            addNotification={addNotification}
-          />
-        )}
-      </main>
-    </div>
+  return (
+    <ErrorBoundary>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={view + (selectedTournament?.id || '') + (activeMatchId || '')}
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {renderView()}
+        </motion.div>
+      </AnimatePresence>
+    </ErrorBoundary>
   );
 }
 
