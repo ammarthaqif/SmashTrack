@@ -247,7 +247,7 @@ const LandingView = ({ onStart }: { onStart: () => void }) => {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
           >
             <Button onClick={() => { console.log("Hero button clicked"); onStart(); }} size="lg" className="h-16 px-10 text-lg font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl shadow-2xl shadow-blue-200">
-              Get Started for Free
+              Access Dashboard
             </Button>
             <Button variant="outline" size="lg" className="h-16 px-10 text-lg font-bold border-slate-200 rounded-2xl">
               Watch Demo
@@ -407,8 +407,38 @@ export default function App() {
           const userSnap = await getDocs(query(collection(db, 'users'), where('uid', '==', u.uid), limit(1)));
           
           if (!userSnap.empty) {
-            const data = userSnap.docs[0].data() as AppUser;
+            let data = userSnap.docs[0].data() as AppUser;
             console.log("User data found:", data.role);
+            
+            // Auto-activate new license if current one is missing or expired
+            const isNowValid = data.role === 'superadmin' || (data.licenseValidUntil && new Date(data.licenseValidUntil) > new Date());
+            if (!isNowValid && data.role === 'organizer') {
+              console.log("Checking for new registered license for existing organizer...");
+              const licenseSnap = await getDocs(query(
+                collection(db, 'licenses'), 
+                where('organizerEmail', '==', u.email),
+                where('status', '==', 'pending'),
+                limit(1)
+              ));
+              
+              if (!licenseSnap.empty) {
+                const licenseDoc = licenseSnap.docs[0];
+                const licenseData = licenseDoc.data() as License;
+                console.log("New license found, auto-activating...");
+                
+                await updateDoc(doc(db, 'users', u.uid), {
+                  licenseId: licenseDoc.id,
+                  licenseValidUntil: licenseData.validUntil
+                });
+                await updateDoc(doc(db, 'licenses', licenseDoc.id), {
+                  status: 'active',
+                  usedByUid: u.uid
+                });
+                
+                data = { ...data, licenseId: licenseDoc.id, licenseValidUntil: licenseData.validUntil };
+                addNotification("Your new license has been activated!", "success");
+              }
+            }
             setAppUser(data);
             // Only auto-redirect if they are stuck on login or if they are superadmin
             if (data.role === 'superadmin') setView('superadmin');
@@ -422,22 +452,60 @@ export default function App() {
               });
             }
           } else {
-            console.log("New user detected, creating profile with 7-day trial...");
+            console.log("New user detected, verifying license for email:", u.email);
             const isDefaultAdmin = u.email === 'ammarthaqif.ar@gmail.com';
-            const trialExpiry = new Date();
-            trialExpiry.setDate(trialExpiry.getDate() + 7);
             
-            const newUser: AppUser = {
-              uid: u.uid,
-              email: u.email || '',
-              role: isDefaultAdmin ? 'superadmin' : 'organizer', // Default to organizer for trial
-              licenseValidUntil: trialExpiry.toISOString()
-            };
-            await setDoc(doc(db, 'users', u.uid), newUser);
-            setAppUser(newUser);
-            if (isDefaultAdmin) setView('superadmin');
-            else setView('organizer');
-            addNotification("Welcome to SmashTrack! You have a 7-day free trial.", "success");
+            if (isDefaultAdmin) {
+              console.log("Default admin detected, creating superadmin profile...");
+              const newUser: AppUser = {
+                uid: u.uid,
+                email: u.email || '',
+                role: 'superadmin'
+              };
+              await setDoc(doc(db, 'users', u.uid), newUser);
+              setAppUser(newUser);
+              setView('superadmin');
+              addNotification("Welcome, System Administrator.", "success");
+            } else {
+              // Check for license matching the email
+              const licenseSnap = await getDocs(query(
+                collection(db, 'licenses'), 
+                where('organizerEmail', '==', u.email),
+                limit(1)
+              ));
+
+              if (!licenseSnap.empty) {
+                const licenseDoc = licenseSnap.docs[0];
+                const licenseData = licenseDoc.data() as License;
+                
+                console.log("License found for user, activating...", licenseDoc.id);
+                
+                const newUser: AppUser = {
+                  uid: u.uid,
+                  email: u.email || '',
+                  role: 'organizer',
+                  licenseId: licenseDoc.id,
+                  licenseValidUntil: licenseData.validUntil
+                };
+                
+                await setDoc(doc(db, 'users', u.uid), newUser);
+                // Update license status to active
+                await updateDoc(doc(db, 'licenses', licenseDoc.id), {
+                  status: 'active',
+                  usedByUid: u.uid
+                });
+                
+                setAppUser(newUser);
+                setView('organizer');
+                addNotification("License activated! Welcome to SmashTrack.", "success");
+              } else {
+                console.log("No license found for email:", u.email);
+                addNotification("No registered license found for this email. Please contact the administrator.", "warning");
+                // Sign out the user as they are not authorized to be an organizer
+                await auth.signOut();
+                setView('landing');
+              }
+            }
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -721,11 +789,19 @@ export default function App() {
 
   const activateLicense = async (pin: string) => {
     if (!user || !appUser) return;
-    const q = query(collection(db, 'licenses'), where('accessPin', '==', pin), where('status', '==', 'pending'), limit(1));
+    console.log("Activating license with PIN:", pin, "for email:", user.email);
+    const q = query(
+      collection(db, 'licenses'), 
+      where('accessPin', '==', pin), 
+      where('organizerEmail', '==', user.email),
+      where('status', '==', 'pending'), 
+      limit(1)
+    );
     const snapshot = await getDocs(q);
     
     if (!snapshot.empty) {
       const license = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() } as License;
+      console.log("Valid license found, activating...");
       
       await updateDoc(doc(db, 'licenses', license.id!), {
         status: 'active',
@@ -747,7 +823,8 @@ export default function App() {
       setAppUser(updatedUser);
       addNotification("License activated! You are now an organizer.", "success");
     } else {
-      alert("Invalid or already used PIN");
+      console.log("License activation failed: PIN/Email mismatch or already used");
+      alert("Invalid PIN or this license was not registered for your email address.");
     }
   };
 
