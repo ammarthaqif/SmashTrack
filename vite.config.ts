@@ -6,8 +6,11 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
+    base: './',
     plugins: [react(), tailwindcss()],
     build: {
+      outDir: 'dist',
+      emptyOutDir: true,
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
