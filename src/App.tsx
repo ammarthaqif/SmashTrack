@@ -120,6 +120,7 @@ const LoginView = ({
                   className="space-y-6"
                 >
                   <Button 
+                    type="button"
                     onClick={() => { console.log("Organizer Login button clicked"); onLogin(); }} 
                     disabled={loginLoading}
                     className="w-full h-12 text-lg font-medium bg-slate-900 hover:bg-slate-800 transition-all"
@@ -214,7 +215,7 @@ const LandingView = ({ onStart }: { onStart: () => void }) => {
           <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-slate-600">
             <a href="#features" className="hover:text-blue-600 transition-colors">Features</a>
             <a href="#pricing" className="hover:text-blue-600 transition-colors">Pricing</a>
-            <Button onClick={() => { console.log("Nav button clicked"); onStart(); }} className="bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-100 px-8 rounded-full">
+            <Button type="button" onClick={() => { console.log("Nav button clicked"); onStart(); }} className="bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-100 px-8 rounded-full">
               Launch Dashboard
             </Button>
           </div>
@@ -256,10 +257,10 @@ const LandingView = ({ onStart }: { onStart: () => void }) => {
             transition={{ delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
           >
-            <Button onClick={() => { console.log("Hero button clicked"); onStart(); }} size="lg" className="h-16 px-10 text-lg font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl shadow-2xl shadow-blue-200">
+            <Button type="button" onClick={() => { console.log("Hero button clicked"); onStart(); }} size="lg" className="h-16 px-10 text-lg font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl shadow-2xl shadow-blue-200">
               Access Dashboard
             </Button>
-            <Button variant="outline" size="lg" className="h-16 px-10 text-lg font-bold border-slate-200 rounded-2xl">
+            <Button type="button" variant="outline" size="lg" className="h-16 px-10 text-lg font-bold border-slate-200 rounded-2xl">
               Watch Demo
             </Button>
           </motion.div>
@@ -529,8 +530,8 @@ export default function App() {
         // Only redirect to landing if they are in a view that REQUIRES auth
         setView(prev => {
           if (prev === 'organizer' || prev === 'superadmin') {
-            console.log("User logged out, redirecting to landing");
-            return 'landing';
+            console.log("User logged out from restricted view, redirecting to login");
+            return 'login'; // Go to login so they can see any access denied messages
           }
           return prev;
         });
@@ -845,13 +846,15 @@ export default function App() {
     }
   };
 
+  const isLicenseValid = appUser?.role === 'superadmin' || (appUser?.role === 'organizer' && appUser.licenseValidUntil && new Date(appUser.licenseValidUntil) > new Date());
+
   const handleStart = () => {
-    console.log("handleStart called. User:", user?.email, "Current View:", view);
-    if (user) {
-      console.log("User is logged in, navigating to organizer");
-      setView('organizer');
+    console.log("handleStart called. User:", user?.email, "AppUser Role:", appUser?.role, "License Valid:", isLicenseValid);
+    if (user && appUser && isLicenseValid) {
+      console.log("User is logged in and valid, navigating to dashboard");
+      setView(appUser.role === 'superadmin' ? 'superadmin' : 'organizer');
     } else {
-      console.log("User is not logged in, navigating to login");
+      console.log("User is not logged in or invalid, navigating to login");
       setView('login');
     }
   };
@@ -891,8 +894,6 @@ export default function App() {
     if (activeMatchId && selectedTournament) {
       return <UmpireScoring matchId={activeMatchId} tournamentId={selectedTournament.id!} onExit={() => setActiveMatchId(null)} />;
     }
-
-    const isLicenseValid = appUser?.role === 'superadmin' || (appUser?.role === 'organizer' && appUser.licenseValidUntil && new Date(appUser.licenseValidUntil) > new Date());
 
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
