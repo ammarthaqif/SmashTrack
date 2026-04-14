@@ -154,6 +154,15 @@ const LoginView = ({
                       <Search className="mr-2 h-4 w-4" /> Join Tournament
                     </Button>
                   </div>
+                  <div className="pt-4 text-center">
+                    <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest mb-1">Debug Info</p>
+                    <p className="text-xs text-slate-500 font-mono break-all bg-slate-100 p-2 rounded border border-slate-200">
+                      Domain: {window.location.hostname}
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-2">
+                      Add this domain to Firebase Console &gt; Authentication &gt; Settings &gt; Authorized domains
+                    </p>
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div
