@@ -97,7 +97,14 @@ export default function AudienceView({ tournamentId, onBack }: AudienceViewProps
                   >
                     <Card className="border-none shadow-xl overflow-hidden bg-white">
                       <div className="bg-slate-900 text-white px-4 py-2 flex justify-between items-center text-xs font-bold">
-                        <span>COURT {match.courtNumber}</span>
+                        <div className="flex items-center gap-2">
+                          <span>COURT {match.courtNumber}</span>
+                          {(match.stage || match.roundName) && (
+                            <span className="text-white/40 font-medium px-2 py-0.5 bg-white/5 rounded">
+                              {match.stage === 'group' ? match.groupName : match.roundName}
+                            </span>
+                          )}
+                        </div>
                         <Badge className="bg-red-500 text-[10px] h-5">LIVE</Badge>
                       </div>
                       <CardContent className="p-6">
@@ -154,7 +161,17 @@ export default function AudienceView({ tournamentId, onBack }: AudienceViewProps
                     </div>
                     <div>
                       <div className="font-bold text-slate-900">{match.player1} vs {match.player2}</div>
-                      <div className="text-xs text-slate-500 uppercase font-medium">{match.status}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-xs text-slate-500 uppercase font-medium">{match.status}</div>
+                        {(match.stage || match.roundName) && (
+                          <>
+                            <div className="w-1 h-1 rounded-full bg-slate-300" />
+                            <div className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">
+                              {match.stage === 'group' ? match.groupName : match.roundName}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">

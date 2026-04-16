@@ -158,7 +158,14 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
             <ArrowLeft className="w-4 h-4 mr-2" /> Exit
           </Button>
           <div className="h-4 w-px bg-white/10" />
-          <span className="text-sm font-medium text-white/80">Court {match.courtNumber} • {match.isDoubles ? 'Doubles' : 'Singles'}</span>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-white/80">Court {match.courtNumber} • {match.isDoubles ? 'Doubles' : 'Singles'}</span>
+            {(match.stage || match.roundName) && (
+              <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">
+                {match.stage === 'group' ? match.groupName : match.roundName}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <Button variant="outline" size="sm" onClick={undo} disabled={undoStack.length === 0} className="bg-transparent border-white/20 text-white hover:bg-white/10">
@@ -312,8 +319,10 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
               Match Completed?
             </DialogTitle>
             <DialogDescription className="text-white/60 text-lg pt-2">
-              Final Score: <span className="text-white font-bold">{match.score1} - {match.score2}</span> (Set {match.currentSet})
-              <br />
+              <div className="mb-4">
+                <span className="text-xs font-bold text-blue-400 uppercase tracking-widest">{match.stage === 'group' ? match.groupName : match.roundName}</span>
+                <div className="text-white">Final Score: <span className="font-bold">{match.score1} - {match.score2}</span> (Set {match.currentSet})</div>
+              </div>
               Are you sure you want to end this match and return to the dashboard?
             </DialogDescription>
           </DialogHeader>

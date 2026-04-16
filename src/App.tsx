@@ -1262,7 +1262,44 @@ export default function App() {
                     <CardHeader>
                       <div className="flex justify-between items-start">
                         <CardTitle className="text-xl group-hover:text-blue-600 transition-colors">{t.name}</CardTitle>
-                        <Badge variant="secondary" className="font-mono">{t.pin}</Badge>
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          <Dialog>
+                            <DialogTrigger render={<Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" />}>
+                              <QrCode className="w-4 h-4" />
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-2xl flex flex-col items-center text-center">
+                              <DialogHeader>
+                                <DialogTitle>{t.name} Access</DialogTitle>
+                                <DialogDescription>Share these PINs or QR codes with umpires and audience members</DialogDescription>
+                              </DialogHeader>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full mt-6">
+                                <div className="flex flex-col items-center p-6 rounded-2xl bg-blue-50 border border-blue-100">
+                                  <div className="bg-blue-600 p-2 rounded-lg mb-4">
+                                    <Smartphone className="w-6 h-6 text-white" />
+                                  </div>
+                                  <h3 className="font-bold text-blue-900 mb-2">Umpire Access</h3>
+                                  <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
+                                    <QRCodeSVG value={t.umpirePin || t.pin} size={150} level="H" includeMargin />
+                                  </div>
+                                  <p className="text-xs text-slate-500 mb-1 uppercase font-bold tracking-wider">Umpire PIN</p>
+                                  <p className="text-2xl font-mono font-black text-blue-600 tracking-widest">{t.umpirePin || t.pin}</p>
+                                </div>
+                                <div className="flex flex-col items-center p-6 rounded-2xl bg-green-50 border border-green-100">
+                                  <div className="bg-green-600 p-2 rounded-lg mb-4">
+                                    <Monitor className="w-6 h-6 text-white" />
+                                  </div>
+                                  <h3 className="font-bold text-green-900 mb-2">Audience Access</h3>
+                                  <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
+                                    <QRCodeSVG value={t.audiencePin || t.pin} size={150} level="H" includeMargin />
+                                  </div>
+                                  <p className="text-xs text-slate-500 mb-1 uppercase font-bold tracking-wider">Audience PIN</p>
+                                  <p className="text-2xl font-mono font-black text-green-600 tracking-widest">{t.audiencePin || t.pin}</p>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Badge variant="secondary" className="font-mono">{t.pin}</Badge>
+                        </div>
                       </div>
                       <CardDescription>{t.venue} • {t.date}</CardDescription>
                     </CardHeader>
@@ -1884,7 +1921,7 @@ function TournamentDashboard({
                         <TableCell>
                           <div className="font-medium">{m.player1} vs {m.player2}</div>
                           {(m.groupName || m.roundName) && (
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 mt-0.5">
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-[10px] text-blue-600 font-black uppercase tracking-wider mt-1 border border-blue-100/50">
                               {m.stage === 'group' ? <Trophy className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}
                               {m.groupName || m.roundName}
                             </div>
