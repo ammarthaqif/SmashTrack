@@ -14,7 +14,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export default function SuperadminDashboard({ onResetSystem }: { onResetSystem?: () => Promise<void> }) {
+export default function SuperadminDashboard({ 
+  onResetSystem,
+  onHome
+}: { 
+  onResetSystem?: () => Promise<void>;
+  onHome?: () => void;
+}) {
   const [licenses, setLicenses] = useState<License[]>([]);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -174,6 +180,13 @@ export default function SuperadminDashboard({ onResetSystem }: { onResetSystem?:
             onClick={() => setActiveTab('users')}
             className="rounded-lg"
           >Organizers</Button>
+          <Button 
+            variant="ghost" 
+            onClick={onHome}
+            className="rounded-lg mr-2"
+          >
+            <Trophy className="w-4 h-4 mr-2" /> Landing Page
+          </Button>
           <div className="w-px bg-slate-200 mx-1 my-1" />
           <Button 
             variant="ghost" 

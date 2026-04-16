@@ -1161,7 +1161,7 @@ export default function App() {
     }
 
     if (view === 'superadmin') {
-      return <SuperadminDashboard onResetSystem={resetSystem} />;
+      return <SuperadminDashboard onResetSystem={resetSystem} onHome={() => setView('landing')} />;
     }
 
     if (view === 'login' && !user) {
@@ -1204,6 +1204,7 @@ export default function App() {
             <div className="flex items-center gap-4">
               {user ? (
                 <div className="flex items-center gap-3">
+                  <Button variant="ghost" size="sm" onClick={() => setView('landing')}>Home</Button>
                   <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-slate-200" />
                   <Button variant="ghost" size="sm" onClick={() => auth.signOut()}>
                     <LogOut className="w-4 h-4 mr-2" /> Sign Out
