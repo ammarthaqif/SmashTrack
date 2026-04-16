@@ -1919,7 +1919,44 @@ function TournamentDashboard({
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="font-medium">{m.player1} vs {m.player2}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium">{m.player1} vs {m.player2}</div>
+                            <Dialog>
+                              <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 p-0 text-slate-300 hover:text-blue-500" />}>
+                                <Edit2 className="w-3 h-3" />
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Edit Match Metadata</DialogTitle>
+                                  <DialogDescription>Update stage, round, or group names for this match</DialogDescription>
+                                </DialogHeader>
+                                <form onSubmit={async (e) => {
+                                  e.preventDefault();
+                                  const fd = new FormData(e.currentTarget);
+                                  const mRef = doc(db, `tournaments/${tournament.id}/matches/${m.id}`);
+                                  await updateDoc(mRef, {
+                                    stage: fd.get('stage') as any,
+                                    groupName: fd.get('groupName') as string,
+                                    roundName: fd.get('roundName') as string
+                                  });
+                                  addNotification("Match metadata updated", "success");
+                                }} className="space-y-4 pt-4">
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium">Stage</label>
+                                    <select name="stage" defaultValue={m.stage} className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm">
+                                      <option value="group">Group Stage</option>
+                                      <option value="knockout">Knockout Stage</option>
+                                    </select>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <label className="text-sm font-medium">Group/Round Name</label>
+                                    <Input name={m.stage === 'group' ? 'groupName' : 'roundName'} defaultValue={m.groupName || m.roundName} placeholder="e.g. Group A or Semi-final" required />
+                                  </div>
+                                  <Button type="submit" className="w-full">Save Changes</Button>
+                                </form>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
                           {(m.groupName || m.roundName) && (
                             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-[10px] text-blue-600 font-black uppercase tracking-wider mt-1 border border-blue-100/50">
                               {m.stage === 'group' ? <Trophy className="w-2.5 h-2.5" /> : <Play className="w-2.5 h-2.5" />}
@@ -2081,48 +2118,62 @@ function TournamentDashboard({
                   <FileUp className="w-4 h-4 mr-2" /> Import Excel
                 </Button>
                 <Dialog open={showLeagueDialog} onOpenChange={setShowLeagueDialog}>
-                  <DialogTrigger render={<Button variant="outline" size="sm" className="gap-2" />}>
-                    <ListOrdered className="w-4 h-4" /> League Setup
+                  <DialogTrigger render={<Button variant="outline" size="sm" className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50" />}>
+                    <ListOrdered className="w-4 h-4" /> Generate Matches
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>League Grouping</DialogTitle>
-                      <DialogDescription>Automatically group players and generate round-robin matches</DialogDescription>
+                      <DialogTitle>Generate League/Knockout Matches</DialogTitle>
+                      <DialogDescription>Create round-robin groups or the initial knockout stage</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Players per Group</label>
-                        <select id="groupSize" className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm">
-                          <option value="3">3 Players</option>
-                          <option value="4">4 Players</option>
-                          <option value="5">5 Players</option>
+                        <label className="text-sm font-medium">Category</label>
+                        <select id="genCategory" defaultValue={playerCategoryTab} className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm">
+                          <option value="singles">Singles</option>
+                          <option value="doubles">Doubles</option>
+                          <option value="mixed">Mixed</option>
                         </select>
                       </div>
-                      <Button 
-                        className="w-full bg-blue-600" 
-                        onClick={() => {
-                          const size = parseInt((document.getElementById('groupSize') as HTMLSelectElement).value);
-                          onGenerateLeague(playerCategoryTab as any, size);
-                        }}
-                      >
-                        Generate Group Matches
-                      </Button>
-
-                      <div className="relative py-4">
-                        <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100" /></div>
-                        <div className="relative flex justify-center text-[10px] uppercase font-bold"><span className="bg-white px-2 text-slate-400">Next Stage</span></div>
+                      
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-4">
+                        <h4 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-2">Round Robin (League)</h4>
+                        <div className="space-y-2">
+                          <label className="text-xs font-medium text-slate-500">Group Size (Players per Group)</label>
+                          <select id="groupSize" className="w-full h-9 rounded-md border border-slate-200 px-3 text-sm">
+                            <option value="3">3 Players</option>
+                            <option value="4">4 Players</option>
+                            <option value="5">5 Players</option>
+                          </select>
+                        </div>
+                        <Button 
+                          className="w-full bg-blue-600 shadow-sm" 
+                          onClick={() => {
+                            const size = parseInt((document.getElementById('groupSize') as HTMLSelectElement).value);
+                            const cat = (document.getElementById('genCategory') as HTMLSelectElement).value as any;
+                            onGenerateLeague(cat, size);
+                            setShowLeagueDialog(false);
+                          }}
+                        >
+                          Generate Group Matches
+                        </Button>
                       </div>
 
-                      <Button 
-                        variant="outline"
-                        className="w-full border-blue-200 text-blue-600 hover:bg-blue-50" 
-                        onClick={() => {
-                          onGenerateKnockout(playerCategoryTab as any);
-                          setShowLeagueDialog(false);
-                        }}
-                      >
-                        Generate Knockout Stage
-                      </Button>
+                      <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
+                        <h4 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-2">Knockout Stage (Initial Bracket)</h4>
+                        <p className="text-[10px] text-slate-500 italic">This uses the results from completed group matches to seed the initial bracket.</p>
+                        <Button 
+                          variant="outline"
+                          className="w-full border-blue-200 text-blue-600 hover:bg-blue-50" 
+                          onClick={() => {
+                            const cat = (document.getElementById('genCategory') as HTMLSelectElement).value as any;
+                            onGenerateKnockout(cat);
+                            setShowLeagueDialog(false);
+                          }}
+                        >
+                          Generate Knockout Stage
+                        </Button>
+                      </div>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -2207,7 +2258,45 @@ function TournamentDashboard({
 
                           return (
                             <TableRow key={p.id}>
-                              <TableCell className="font-medium">{p.name}</TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-2">
+                                  {p.name}
+                                  <Dialog>
+                                    <DialogTrigger render={<Button variant="ghost" size="icon" className="h-6 w-6 p-0 text-slate-300 hover:text-blue-500" />}>
+                                      <Edit2 className="w-3 h-3" />
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Quick Edit Player</DialogTitle>
+                                      </DialogHeader>
+                                      <form onSubmit={async (e) => {
+                                        e.preventDefault();
+                                        const fd = new FormData(e.currentTarget);
+                                        const pRef = doc(db, `tournaments/${tournament.id}/players/${p.id}`);
+                                        await updateDoc(pRef, {
+                                          name: fd.get('name') as string,
+                                          category: fd.get('category') as any
+                                        });
+                                        addNotification("Player updated", "success");
+                                      }} className="space-y-4 pt-4">
+                                        <div className="space-y-2">
+                                          <label className="text-sm font-medium">Player Name</label>
+                                          <Input name="name" defaultValue={p.name} required />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <label className="text-sm font-medium">Category</label>
+                                          <select name="category" defaultValue={p.category} className="w-full h-10 rounded-md border border-slate-200 px-3 text-sm" required>
+                                            <option value="singles">Singles</option>
+                                            <option value="doubles">Doubles</option>
+                                            <option value="mixed">Mixed</option>
+                                          </select>
+                                        </div>
+                                        <Button type="submit" className="w-full">Save Changes</Button>
+                                      </form>
+                                    </DialogContent>
+                                  </Dialog>
+                                </div>
+                              </TableCell>
                               <TableCell className="text-center">{playerMatches.length}</TableCell>
                               <TableCell className="text-center text-green-600 font-bold">{wins}</TableCell>
                               <TableCell className="text-center text-red-600 font-bold">{losses}</TableCell>
