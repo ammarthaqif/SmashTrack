@@ -9,7 +9,7 @@ import { Input } from './components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
-import { Trophy, Users, Layout, Play, CheckCircle, QrCode, LogIn, LogOut, Plus, Trash2, Smartphone, Monitor, Search, FileUp, Download, Settings, ChevronDown, ChevronUp, Key, Printer, FileSpreadsheet, Edit2, ListOrdered, ExternalLink, ShieldCheck, MapPin, Calendar, User as UserIcon, Shield, Smartphone as Phone } from 'lucide-react';
+import { Trophy, Users, Layout, Play, CheckCircle, QrCode, LogIn, LogOut, Plus, Trash2, Smartphone, Monitor, Search, FileUp, Download, Settings, ChevronDown, ChevronUp, Key, Printer, FileSpreadsheet, Edit2, ListOrdered, ExternalLink, ShieldCheck, MapPin, Calendar, User as UserIcon, Shield, Smartphone as Phone, ImagePlus, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
@@ -492,11 +492,13 @@ export default function App() {
             let data = userDoc.data() as AppUser;
             console.log("User data found:", data.role);
             
-            // Auto-activate new license if current one is missing or expired
-            const isNowValid = data.role === 'superadmin' || (data.licenseValidUntil && new Date(data.licenseValidUntil) > new Date());
-            if (!isNowValid && data.role === 'organizer') {
-              console.log("Checking for new registered license for existing organizer...");
-              const userEmail = u.email || data.email;
+            // Auto-activate new license if current one is missing or expired, or if they are a basic user
+            const isNowValid = data.role === 'superadmin' || 
+                             (data.role === 'organizer' && data.licenseValidUntil && new Date(data.licenseValidUntil) > new Date());
+            
+            if (!isNowValid && data.role !== 'superadmin') {
+              console.log("Checking for new registered license for existing account...");
+              const userEmail = (u.email || data.email || '').toLowerCase();
               if (userEmail) {
                 const licenseSnap = await getDocs(query(
                   collection(db, 'licenses'), 
@@ -511,16 +513,23 @@ export default function App() {
                   console.log("New license found, auto-activating...");
                   
                   await updateDoc(doc(db, 'users', u.uid), {
+                    role: 'organizer',
                     licenseId: licenseDoc.id,
                     licenseValidUntil: licenseData.validUntil
                   });
                   await updateDoc(doc(db, 'licenses', licenseDoc.id), {
                     status: 'active',
-                    usedByUid: u.uid
+                    usedByUid: u.uid,
+                    lastLoginAt: new Date().toISOString()
                   });
                   
-                  data = { ...data, licenseId: licenseDoc.id, licenseValidUntil: licenseData.validUntil };
-                  addNotification("Your new license has been activated!", "success");
+                  data = { 
+                    ...data, 
+                    role: 'organizer',
+                    licenseId: licenseDoc.id, 
+                    licenseValidUntil: licenseData.validUntil 
+                  };
+                  addNotification("Your license has been activated!", "success");
                 }
               }
             }
@@ -718,7 +727,6 @@ export default function App() {
     } catch (error: any) {
       console.error("Login failed details:", error);
       addNotification(`Login failed: ${error.message || "Unknown error"}`, "warning");
-      alert(`Login failed: ${error.message || "Unknown error"}. Please ensure popups are allowed and you are not in an incognito window that blocks third-party cookies.`);
     } finally {
       setLoginLoading(false);
     }
@@ -772,10 +780,12 @@ export default function App() {
         await setDoc(doc(db, 'users', u.uid), newUser);
         
         // 4. Update license status and last login session
+        // Inclusion of accessPin allows security rules to verify identity for anonymous users
         await updateDoc(doc(db, 'licenses', licenseDoc.id), {
           status: 'active',
           usedByUid: u.uid,
-          lastLoginAt: new Date().toISOString()
+          lastLoginAt: new Date().toISOString(),
+          accessPin: pin // Redundant but required for security rules verification during update
         });
         
         setAppUser(newUser);
@@ -784,7 +794,6 @@ export default function App() {
       } else {
         await auth.signOut();
         addNotification("Invalid Email or PIN. Please check your credentials.", "warning");
-        alert("Invalid Email or PIN. Please ensure you are using the registered email and the correct access PIN.");
       }
     } catch (error: any) {
       console.error("License login failed:", error);
@@ -795,42 +804,75 @@ export default function App() {
   };
 
   const resetSystem = async () => {
-    if (!appUser || appUser.role !== 'superadmin') return;
+    if (!appUser || appUser.role !== 'superadmin') {
+       addNotification("Access Denied: Superadmin privileges required.", "warning");
+       return;
+    }
     
     setLoading(true);
+    let errorCount = 0;
     try {
       addNotification("Starting system reset...", "warning");
+      console.log("System Reset: Initiated by", user?.email);
       
       const collectionsToClear = ['tournaments', 'licenses', 'mail'];
       for (const collName of collectionsToClear) {
-        const snap = await getDocs(collection(db, collName));
-        for (const docSnap of snap.docs) {
-          // If tournaments, also clear subcollections
-          if (collName === 'tournaments') {
-            const matches = await getDocs(collection(db, `tournaments/${docSnap.id}/matches`));
-            for (const m of matches.docs) await deleteDoc(doc(db, `tournaments/${docSnap.id}/matches/${m.id}`));
-            const umpires = await getDocs(collection(db, `tournaments/${docSnap.id}/umpires`));
-            for (const u of umpires.docs) await deleteDoc(doc(db, `tournaments/${docSnap.id}/umpires/${u.id}`));
-            const players = await getDocs(collection(db, `tournaments/${docSnap.id}/players`));
-            for (const p of players.docs) await deleteDoc(doc(db, `tournaments/${docSnap.id}/players/${p.id}`));
+        console.log(`System Reset: Clearing collection ${collName}...`);
+        try {
+          const snap = await getDocs(collection(db, collName));
+          for (const docSnap of snap.docs) {
+            try {
+              // If tournaments, also clear subcollections
+              if (collName === 'tournaments') {
+                const subcolls = ['matches', 'umpires', 'players'];
+                for (const sub of subcolls) {
+                  const subSnap = await getDocs(collection(db, `tournaments/${docSnap.id}/${sub}`));
+                  for (const sDoc of subSnap.docs) {
+                    await deleteDoc(doc(db, `tournaments/${docSnap.id}/${sub}/${sDoc.id}`));
+                  }
+                }
+              }
+              await deleteDoc(doc(db, collName, docSnap.id));
+            } catch (err) {
+              console.error(`Failed to delete ${collName}/${docSnap.id}:`, err);
+              errorCount++;
+            }
           }
-          await deleteDoc(doc(db, collName, docSnap.id));
+        } catch (err) {
+          console.error(`Failed to fetch ${collName}:`, err);
+          errorCount++;
         }
       }
       
       // Clear users except self
-      const usersSnap = await getDocs(collection(db, 'users'));
-      for (const uDoc of usersSnap.docs) {
-        if (uDoc.id !== user?.uid) {
-          await deleteDoc(doc(db, 'users', uDoc.id));
+      console.log("System Reset: Clearing users...");
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        for (const uDoc of usersSnap.docs) {
+          if (uDoc.id !== user?.uid) {
+            try {
+              await deleteDoc(doc(db, 'users', uDoc.id));
+            } catch (err) {
+              console.error(`Failed to delete user ${uDoc.id}:`, err);
+              errorCount++;
+            }
+          }
         }
+      } catch (err) {
+        console.error("Failed to fetch users:", err);
+        errorCount++;
       }
       
-      addNotification("System reset complete. Starting fresh.", "success");
-      window.location.reload();
-    } catch (error) {
-      console.error("Reset failed:", error);
-      addNotification("Reset failed. Check console.", "warning");
+      if (errorCount > 0) {
+        addNotification(`Reset finished with ${errorCount} errors. Some items may remain.`, "warning");
+      } else {
+        addNotification("System reset complete. Starting fresh.", "success");
+      }
+      
+      setTimeout(() => window.location.reload(), 2000);
+    } catch (error: any) {
+      console.error("Reset failed unexpectedly:", error);
+      addNotification(`Reset failed: ${error.message}`, "warning");
     } finally {
       setLoading(false);
     }
@@ -874,7 +916,7 @@ export default function App() {
       }
 
     console.warn("Invalid PIN entered:", pin);
-    alert("Invalid PIN. Please check the PIN and try again.");
+    addNotification("Invalid PIN. Please check the PIN and try again.", "warning");
   };
 
   const selectTournamentAsOrganizer = (t: Tournament) => {
@@ -912,6 +954,19 @@ export default function App() {
       createdAt: new Date().toISOString(),
     };
     const docRef = await addDoc(collection(db, 'tournaments'), newTournament);
+    
+    // Safety check: if our license is still pending, activate it
+    if (appUser?.licenseId) {
+      const lSnap = await getDoc(doc(db, 'licenses', appUser.licenseId));
+      if (lSnap.exists() && lSnap.data()?.status === 'pending') {
+         await updateDoc(doc(db, 'licenses', appUser.licenseId), {
+           status: 'active',
+           usedByUid: user.uid,
+           lastLoginAt: new Date().toISOString()
+         });
+      }
+    }
+
     form.reset();
     const createdTournament = { id: docRef.id, ...newTournament };
     setTempTournament(createdTournament);
@@ -965,16 +1020,21 @@ export default function App() {
     teamName: string = '',
     members: string[] = []
   ) => {
-    const newPlayer: Omit<Player, 'id'> = {
-      name: isTeam ? teamName : name,
-      tournamentId,
-      category,
-      isTeam,
-      teamName: isTeam ? teamName : undefined,
-      members: isTeam ? members : undefined,
-      stats: { matchesPlayed: 0, wins: 0, losses: 0, totalPoints: 0 }
-    };
-    await addDoc(collection(db, `tournaments/${tournamentId}/players`), newPlayer);
+    try {
+      const newPlayer: Omit<Player, 'id'> = {
+        name: isTeam ? teamName : name,
+        tournamentId,
+        category,
+        isTeam,
+        teamName: isTeam ? teamName : undefined,
+        members: isTeam ? members : undefined,
+        stats: { matchesPlayed: 0, wins: 0, losses: 0, totalPoints: 0 }
+      };
+      await addDoc(collection(db, `tournaments/${tournamentId}/players`), newPlayer);
+      addNotification(`Player ${isTeam ? teamName : name} registered successfully`, 'success');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, `tournaments/${tournamentId}/players`);
+    }
   };
 
   const importPlayers = async (tournamentId: string, file: File) => {
@@ -1036,6 +1096,16 @@ export default function App() {
     await updateDoc(tRef, {
       [`courtNames.${courtNumber}`]: name
     });
+  };
+
+  const updateTournament = async (tId: string, updates: Partial<Tournament>) => {
+    try {
+      const tRef = doc(db, 'tournaments', tId);
+      await updateDoc(tRef, updates);
+      addNotification("Tournament details updated", "success");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `tournaments/${tId}`);
+    }
   };
 
   const autoSchedule = async (tournamentId: string) => {
@@ -1224,7 +1294,7 @@ export default function App() {
       addNotification("License activated! You are now an organizer.", "success");
     } else {
       console.log("License activation failed: PIN/Email mismatch or already used");
-      alert("Invalid PIN or this license was not registered for your email address.");
+      addNotification("Invalid PIN or this license was not registered for your email address.", "warning");
     }
   };
 
@@ -1275,6 +1345,7 @@ export default function App() {
         <SuperadminDashboard 
           onResetSystem={resetSystem} 
           onHome={() => setView('landing')} 
+          addNotification={addNotification}
           onViewAsRole={(tournament, role) => {
             setSelectedTournamentId(tournament.id!);
             setView(role);
@@ -1334,6 +1405,7 @@ export default function App() {
           onRegister={(name, cat, isTeam, teamName, members) => {
             registerPlayer(selectedTournament.id!, name, cat, isTeam, teamName, members);
           }}
+          addNotification={addNotification}
           onBack={() => {
             setView('landing');
             setSelectedTournamentId(null);
@@ -1403,7 +1475,7 @@ export default function App() {
                   if (pin === pinPrompt.t.pin) {
                     pinPrompt.callback();
                   } else {
-                    alert("Incorrect PIN");
+                    addNotification("Incorrect PIN", "warning");
                   }
                 }} className="space-y-4 pt-4">
                   <Input name="pin" placeholder="Enter PIN" className="text-center text-2xl tracking-widest font-mono uppercase" required />
@@ -1529,6 +1601,7 @@ export default function App() {
               umpires={umpires}
               onBack={() => { setSelectedTournamentId(null); setTempTournament(null); }} 
               onUmpireMatch={(id) => setActiveMatchId(id)}
+              onUpdateTournament={(updates) => updateTournament(selectedTournament.id!, updates)}
               onCreateMatch={createMatch}
               onRegisterPlayer={registerPlayer}
               onImportPlayers={importPlayers}
@@ -1595,6 +1668,7 @@ function TournamentDashboard({
   umpires,
   onBack, 
   onUmpireMatch, 
+  onUpdateTournament,
   onCreateMatch,
   onRegisterPlayer,
   onImportPlayers,
@@ -1612,6 +1686,7 @@ function TournamentDashboard({
   umpires: Umpire[],
   onBack: () => void,
   onUmpireMatch: (id: string) => void,
+  onUpdateTournament: (updates: Partial<Tournament>) => void,
   onCreateMatch: (tId: string, p1Id?: string, p2Id?: string, uId?: string, stage?: 'group' | 'knockout', groupName?: string, roundName?: string, category?: 'singles' | 'doubles' | 'mixed') => void,
   onRegisterPlayer: (tId: string, name: string, category: 'singles' | 'doubles' | 'mixed', isTeam?: boolean, teamName?: string, members?: string[]) => void,
   onImportPlayers: (tId: string, file: File) => void,
@@ -1784,99 +1859,109 @@ function TournamentDashboard({
                 onSubmit={async (e) => {
                   e.preventDefault();
                   const fd = new FormData(e.currentTarget);
-                  const tRef = doc(db, 'tournaments', tournament.id!);
-                  await updateDoc(tRef, {
+                  onUpdateTournament({
                     name: fd.get('name') as string,
                     date: fd.get('date') as string,
                     venue: fd.get('venue') as string,
                     numCourts: Number(fd.get('courts')),
                     logoUrl: logoPreview || fd.get('logoUrl') as string
                   });
-                  addNotification("Settings updated successfully!", "success");
                 }} 
                 className="space-y-4 pt-4"
               >
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tournament Name</label>
-                  <Input name="name" defaultValue={tournament.name} required />
+                  <label className="text-sm font-medium text-slate-700">Tournament Name</label>
+                  <Input name="name" defaultValue={tournament.name} required className="rounded-xl" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Tournament Logo</label>
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center overflow-hidden bg-slate-50">
-                      {logoPreview ? (
-                        <img src={logoPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <Trophy className="w-6 h-6 text-slate-300" />
-                      )}
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <Input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        ref={logoUploadRef}
-                        onChange={handleLogoUpload}
-                      />
-                      <div className="flex gap-2">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm" 
-                          className="flex-1"
-                          onClick={() => logoUploadRef.current?.click()}
-                        >
-                          Upload File
-                        </Button>
-                        {logoPreview && (
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="sm" 
-                            className="text-red-500"
-                            onClick={() => setLogoPreview(null)}
-                          >
-                            Clear
-                          </Button>
+                
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-slate-700">Tournament Logo</label>
+                  <div className="p-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+                    <div className="flex items-center gap-6">
+                      <div className="w-20 h-20 rounded-2xl border-2 border-white shadow-sm flex items-center justify-center overflow-hidden bg-white shrink-0">
+                        {logoPreview ? (
+                          <img src={logoPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Trophy className="w-8 h-8 text-slate-300" />
                         )}
                       </div>
-                      <Input 
-                        name="logoUrl" 
-                        placeholder="Or paste image URL..." 
-                        defaultValue={tournament.logoUrl}
-                        onChange={(e) => setLogoPreview(e.target.value)}
-                        className="h-8 text-xs"
-                      />
+                      <div className="flex-1 space-y-3">
+                        <Input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          ref={logoUploadRef}
+                          onChange={handleLogoUpload}
+                        />
+                        <div className="flex gap-2">
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex-1 rounded-xl bg-white"
+                            onClick={() => logoUploadRef.current?.click()}
+                          >
+                            <ImagePlus className="w-4 h-4 mr-2" /> Upload
+                          </Button>
+                          {logoPreview && (
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl px-3"
+                              onClick={() => setLogoPreview(null)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <Input 
+                          name="logoUrl" 
+                          placeholder="Or paste image URL..." 
+                          defaultValue={tournament.logoUrl}
+                          onChange={(e) => setLogoPreview(e.target.value)}
+                          className="h-9 text-xs rounded-xl"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 italic">Upload a logo or provide a direct image link</p>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Date</label>
-                    <Input name="date" type="date" defaultValue={tournament.date} required />
+                    <label className="text-sm font-medium text-slate-700">Date</label>
+                    <Input name="date" type="date" defaultValue={tournament.date} required className="rounded-xl" />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Number of Courts</label>
-                    <Input name="courts" type="number" min="1" defaultValue={tournament.numCourts} required />
+                    <label className="text-sm font-medium text-slate-700">Courts</label>
+                    <Input name="courts" type="number" min="1" defaultValue={tournament.numCourts} required className="rounded-xl" />
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Venue</label>
-                  <Input name="venue" defaultValue={tournament.venue} required />
+                  <label className="text-sm font-medium text-slate-700">Venue</label>
+                  <Input name="venue" defaultValue={tournament.venue} required className="rounded-xl" />
                 </div>
-                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+
+                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 rounded-xl h-12 text-base font-bold shadow-lg shadow-blue-100 mt-2">
+                  Save Changes
+                </Button>
                 
-                <div className="pt-6 border-t border-slate-100 mt-6">
+                <div className="pt-6 border-t border-slate-100 mt-4">
                   <Button 
                     type="button" 
                     variant="ghost" 
-                    className="w-full text-red-500 hover:bg-red-50 hover:text-red-600"
+                    className="w-full text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl"
                     onClick={async () => {
-                      if (window.confirm("Are you sure you want to delete this tournament? This action cannot be undone.")) {
+                      // Note: In a production app we'd use a dedicated 'Delete Confirmation' dialog
+                      // But to avoid blocking iframe APIs, we'll proceed and use notifications.
+                      try {
                         await deleteDoc(doc(db, 'tournaments', tournament.id!));
                         addNotification("Tournament deleted", "info");
                         onBack();
+                      } catch (err) {
+                        console.error("Delete failed:", err);
+                        addNotification("Failed to delete tournament.", "warning");
                       }
                     }}
                   >
@@ -2652,11 +2737,13 @@ function TournamentDashboard({
 function PublicRegistrationView({ 
   tournament, 
   onRegister, 
-  onBack 
+  onBack,
+  addNotification
 }: { 
   tournament: Tournament, 
   onRegister: (name: string, category: 'singles' | 'doubles' | 'mixed', isTeam: boolean, teamName?: string, members?: string[]) => void,
-  onBack: () => void 
+  onBack: () => void,
+  addNotification: (message: string, type?: 'info' | 'success' | 'warning') => void
 }) {
   const [isTeam, setIsTeam] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -2702,18 +2789,23 @@ function PublicRegistrationView({
             <CardDescription>Fill in your information to join the bracket</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={(e) => {
+            <form onSubmit={async (e) => {
               e.preventDefault();
               const fd = new FormData(e.currentTarget);
               const name = fd.get('name') as string;
               const cat = fd.get('category') as any;
               
-              if (isTeam) {
-                onRegister('', cat, true, fd.get('teamName') as string, [fd.get('p1') as string, fd.get('p2') as string]);
-              } else {
-                onRegister(name, cat, false);
+              try {
+                if (isTeam) {
+                  await (onRegister as any)('', cat, true, fd.get('teamName') as string, [fd.get('p1') as string, fd.get('p2') as string]);
+                } else {
+                  await (onRegister as any)(name, cat, false);
+                }
+                setSubmitted(true);
+              } catch (err) {
+                console.error("Public registration error:", err);
+                addNotification("Failed to register. Please check your internet connection.", "warning");
               }
-              setSubmitted(true);
             }} className="space-y-6">
               <div className="flex p-1 bg-slate-100 rounded-2xl">
                 <Button 

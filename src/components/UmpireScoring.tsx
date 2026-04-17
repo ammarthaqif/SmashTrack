@@ -21,11 +21,16 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
   const [undoStack, setUndoStack] = useState<Partial<Match>[]>([]);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showSideSwitch, setShowSideSwitch] = useState(false);
+  const [manualInput, setManualInput] = useState<{ p1: string; p2: string }>({ p1: '0', p2: '0' });
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, `tournaments/${tournamentId}/matches/${matchId}`), (snapshot) => {
       if (snapshot.exists()) {
-        setMatch({ id: snapshot.id, ...snapshot.data() } as Match);
+        const data = snapshot.id ? { id: snapshot.id, ...snapshot.data() } as Match : null;
+        if (data) {
+          setMatch(data);
+          setManualInput({ p1: data.score1.toString(), p2: data.score2.toString() });
+        }
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `tournaments/${tournamentId}/matches/${matchId}`);
@@ -49,10 +54,12 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
     let newScore1 = player === 1 ? match.score1 + amount : match.score1;
     let newScore2 = player === 2 ? match.score2 + amount : match.score2;
 
-    // Basic Badminton Logic: Server changes on point win
+    // Basic Badminton Logic: Server changes to the side that won the point
     let newServer = match.server;
-    if (player === 1) newServer = 'p1';
-    if (player === 2) newServer = 'p2';
+    if (amount > 0) {
+      if (player === 1) newServer = 'p1';
+      if (player === 2) newServer = 'p2';
+    }
 
     // Check for set win (21 points, or 2 point lead after 20, max 30)
     const isSetOver = (s1: number, s2: number) => {
@@ -64,10 +71,10 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
 
     if (isSetOver(newScore1, newScore2)) {
       const newSets = [...match.sets, { s1: newScore1, s2: newScore2 }];
-      const isMatchOver = newSets.length >= 2 && (
-        (newSets.filter(s => s.s1 > s.s2).length >= 2) || 
-        (newSets.filter(s => s.s2 > s.s1).length >= 2)
-      );
+      // Best of 3 sets logic
+      const p1Sets = newSets.filter(s => s.s1 > s.s2).length;
+      const p2Sets = newSets.filter(s => s.s2 > s.s1).length;
+      const isMatchOver = p1Sets >= 2 || p2Sets >= 2;
 
       await updateDoc(matchRef, {
         score1: 0,
@@ -85,7 +92,6 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
 
     // Check for 3rd set mid-point side switch logic
     if (match.currentSet === 3 && (newScore1 === 11 || newScore2 === 11) && amount > 0) {
-      // Small check to ensure we only show the dialog once when the score hits 11
       const isExactly11 = (newScore1 === 11 && match.score1 < 11) || (newScore2 === 11 && match.score2 < 11);
       if (isExactly11) {
         setShowSideSwitch(true);
@@ -104,18 +110,33 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
     if (!match) return;
     const score = parseInt(value) || 0;
     
-    setUndoStack(prev => [...prev, { 
-      score1: match.score1, 
-      score2: match.score2, 
-      server: match.server, 
-      sets: [...match.sets],
-      currentSet: match.currentSet
-    }]);
+    // Update local state first for immediate UI feedback
+    setManualInput(prev => ({ 
+      ...prev, 
+      [player === 1 ? 'p1' : 'p2']: value 
+    }));
 
+    // debounce or update on blur would be better, but simple updateDoc for now
     const matchRef = doc(db, `tournaments/${tournamentId}/matches/${matchId}`);
     await updateDoc(matchRef, {
       [player === 1 ? 'score1' : 'score2']: Math.max(0, score)
     });
+  };
+
+  const isGamePoint = (p1: number, p2: number) => {
+    // If someone is at 20 or more and leading
+    if (p1 >= 20 && p1 > p2) return true;
+    return false;
+  };
+
+  const isMatchPoint = (p1: number, p2: number, setsData: {s1: number, s2: number}[], currentSet: number) => {
+    if (!isGamePoint(p1, p2)) return false;
+    
+    const p1Sets = setsData.filter(s => s.s1 > s.s2).length;
+    // P1 wins match if they win this set and already have 1 set
+    if (currentSet === 3) return true; // Final set is always match point
+    if (currentSet === 2 && p1Sets === 1) return true; // Already won first set
+    return false;
   };
 
   const nextSetManually = async () => {
@@ -253,9 +274,9 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
             {match.score1 >= 20 && match.score2 >= 20 && match.score1 === match.score2 && (
               <div className="bg-yellow-400 text-slate-900 px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 shadow-xl z-20">Deuce</div>
             )}
-            {match.score1 >= 20 && (match.score1 > match.score2) && (match.score1 - match.score2 === 1) && (
+            {isGamePoint(match.score1, match.score2) && (
               <div className="bg-red-500 text-white px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 shadow-xl z-20 animate-pulse">
-                {match.currentSet === 3 || (match.currentSet === 2 && match.sets[0]?.s1 > match.sets[0]?.s2) ? 'Match Point' : 'Set Point'}
+                {isMatchPoint(match.score1, match.score2, match.sets, match.currentSet) ? 'Match Point' : 'Set Point'}
               </div>
             )}
           </div>
@@ -279,7 +300,7 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
                 <Input 
                   type="number" 
                   className="w-20 h-10 bg-white/5 border-white/10 text-center text-xl font-bold"
-                  value={match.score1}
+                  value={manualInput.p1}
                   onChange={(e) => manualScoreUpdate(1, e.target.value)}
                 />
               </div>
@@ -306,9 +327,9 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
             {match.score1 >= 20 && match.score2 >= 20 && match.score1 === match.score2 && (
               <div className="bg-yellow-400 text-slate-900 px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 shadow-xl z-20">Deuce</div>
             )}
-            {match.score2 >= 20 && (match.score2 > match.score1) && (match.score2 - match.score1 === 1) && (
+            {isGamePoint(match.score2, match.score1) && (
               <div className="bg-red-500 text-white px-4 py-1 rounded-full text-[10px] font-black tracking-widest uppercase mb-4 shadow-xl z-20 animate-pulse">
-                {match.currentSet === 3 || (match.currentSet === 2 && match.sets[0]?.s2 > match.sets[0]?.s1) ? 'Match Point' : 'Set Point'}
+                {isMatchPoint(match.score2, match.score1, match.sets, match.currentSet) ? 'Match Point' : 'Set Point'}
               </div>
             )}
           </div>
@@ -332,7 +353,7 @@ export default function UmpireScoring({ matchId, tournamentId, onExit }: UmpireS
                 <Input 
                   type="number" 
                   className="w-20 h-10 bg-white/5 border-white/10 text-center text-xl font-bold"
-                  value={match.score2}
+                  value={manualInput.p2}
                   onChange={(e) => manualScoreUpdate(2, e.target.value)}
                 />
               </div>

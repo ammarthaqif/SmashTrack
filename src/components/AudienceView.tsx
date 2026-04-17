@@ -158,17 +158,24 @@ export default function AudienceView({ tournamentId, onSelectMatch, onExit, onBa
                   </div>
                   <CardContent className="p-6">
                     <div className="flex flex-col gap-6">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-4">
                         <div className="flex-1 space-y-1">
                           <p className="text-xl font-black text-slate-900 leading-tight truncate">{match.player1}</p>
                           {match.server === 'p1' && <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[9px] font-bold">SERVING</Badge>}
                         </div>
-                        <div className={cn(
-                          "w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black transition-colors",
-                          match.score1 > match.score2 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
-                        )}>
-                          {match.score1}
-                        </div>
+                        <AnimatePresence mode="wait">
+                          <motion.div 
+                            key={match.score1}
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: -20, opacity: 0 }}
+                            className={cn(
+                              "w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black transition-colors shrink-0",
+                              match.score1 > match.score2 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
+                            )}>
+                            {match.score1}
+                          </motion.div>
+                        </AnimatePresence>
                       </div>
 
                       <div className="flex items-center gap-4">
@@ -177,27 +184,62 @@ export default function AudienceView({ tournamentId, onSelectMatch, onExit, onBa
                         <div className="h-px bg-slate-100 flex-1" />
                       </div>
 
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-4">
                         <div className="flex-1 space-y-1">
                           <p className="text-xl font-black text-slate-900 leading-tight truncate">{match.player2}</p>
                           {match.server === 'p2' && <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[9px] font-bold">SERVING</Badge>}
                         </div>
-                        <div className={cn(
-                          "w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black transition-colors",
-                          match.score2 > match.score1 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
-                        )}>
-                          {match.score2}
-                        </div>
+                        <AnimatePresence mode="wait">
+                          <motion.div 
+                            key={match.score2}
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            exit={{ y: -20, opacity: 0 }}
+                            className={cn(
+                              "w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black transition-colors shrink-0",
+                              match.score2 > match.score1 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-900"
+                            )}>
+                            {match.score2}
+                          </motion.div>
+                        </AnimatePresence>
                       </div>
 
-                      <div className="pt-4 border-t border-slate-50 flex items-center justify-between">
-                         <div className="flex gap-2 text-[10px] font-mono font-bold text-slate-400">
-                            {match.sets?.map((s, i) => (
-                               <Badge key={i} variant="outline" className="text-[10px] font-mono border-slate-100 px-1">{s.s1}-{s.s2}</Badge>
-                            ))}
+                      <div className="pt-4 border-t border-slate-100 space-y-4">
+                         <div className="flex items-center gap-2 mb-1">
+                            <div className="h-1 w-4 bg-blue-600 rounded-full" />
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Match Details</span>
                          </div>
-                         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            {match.stage === 'group' ? match.groupName : match.roundName}
+                         
+                         <div className="flex items-center justify-between">
+                            <div className="flex gap-2">
+                               {match.sets?.map((s, i) => (
+                                  <div key={i} className="flex flex-col items-center">
+                                    <span className="text-[8px] font-bold text-slate-400 uppercase">Set {i+1}</span>
+                                    <Badge variant="outline" className="text-[10px] font-mono border-slate-200 bg-slate-50 px-2 py-0.5">{s.s1}-{s.s2}</Badge>
+                                  </div>
+                               ))}
+                               {!match.sets?.length && <span className="text-[10px] font-medium text-slate-400 italic">No sets completed</span>}
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Status</p>
+                               <Badge className="bg-blue-50 text-blue-700 hover:bg-blue-50 border-none font-black text-[9px] py-0 px-2">Set {match.currentSet}</Badge>
+                            </div>
+                         </div>
+
+                         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="flex items-center gap-2">
+                               <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center border border-slate-200">
+                                  <Users className="w-4 h-4 text-slate-400" />
+                                </div>
+                                <div>
+                                   <p className="text-[9px] font-black text-slate-400 uppercase leading-none">Umpire</p>
+                                   <p className="text-xs font-bold text-slate-700">{match.umpireName || 'To Be Assigned'}</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[9px] font-black text-slate-400 uppercase leading-none">Format</p>
+                               <p className="text-xs font-bold text-slate-700">{match.category || (match.isDoubles ? 'Doubles' : 'Singles')}</p>
+                            </div>
                          </div>
                       </div>
 
