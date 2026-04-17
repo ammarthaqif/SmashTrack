@@ -9,7 +9,7 @@ import { Input } from './components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
-import { Trophy, Users, Layout, Play, CheckCircle, QrCode, LogIn, LogOut, Plus, Trash2, Smartphone, Monitor, Search, FileUp, Download, Settings, ChevronDown, ChevronUp, Key, Printer, FileSpreadsheet, Edit2, ListOrdered, ExternalLink, ShieldCheck, MapPin, Calendar, User as UserIcon, Shield, Smartphone as Phone, ImagePlus, X, Database } from 'lucide-react';
+import { Trophy, Users, Layout, Play, CheckCircle, QrCode, LogIn, LogOut, Plus, Trash2, Smartphone, Monitor, Search, FileUp, Download, Settings, ChevronDown, ChevronUp, Key, Printer, FileSpreadsheet, Edit2, ListOrdered, ExternalLink, ShieldCheck, MapPin, Calendar, User as UserIcon, Shield, Smartphone as Phone, ImagePlus, X, Database, Award } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
@@ -19,6 +19,7 @@ import UmpireScoring from './components/UmpireScoring';
 import AudienceView from './components/AudienceView';
 import SuperadminDashboard from './components/SuperadminDashboard';
 import UmpireDashboard from './components/UmpireDashboard';
+import CertificateTemplate from './components/CertificateTemplate';
 
 // --- Error Boundary ---
 
@@ -1732,6 +1733,7 @@ function TournamentDashboard({
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(tournament.logoUrl || null);
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [viewingCertificate, setViewingCertificate] = useState<Player | null>(null);
   const [showLeagueDialog, setShowLeagueDialog] = useState(false);
   const [showFormDialog, setShowFormDialog] = useState(false);
   const [isTeamReg, setIsTeamReg] = useState(false);
@@ -1833,6 +1835,15 @@ function TournamentDashboard({
     printWindow.document.write(content);
     printWindow.document.close();
     printWindow.print();
+  };
+
+  const updatePlayerAchievement = async (playerId: string, achievement: Player['achievement']) => {
+    try {
+      await updateDoc(doc(db, `tournaments/${tournament.id}/players/${playerId}`), { achievement });
+      addNotification?.("Player achievement updated", "success");
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `tournaments/${tournament.id}/players`);
+    }
   };
 
   return (
@@ -2046,6 +2057,7 @@ function TournamentDashboard({
           <TabsTrigger value="matches" className="rounded-lg px-6">Matches</TabsTrigger>
           <TabsTrigger value="umpires" className="rounded-lg px-6">Umpires</TabsTrigger>
           <TabsTrigger value="players" className="rounded-lg px-6">Players</TabsTrigger>
+          <TabsTrigger value="certificates" className="rounded-lg px-6">Certificates</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -2756,7 +2768,127 @@ function TournamentDashboard({
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="certificates" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-gold" /> Registry Certificate Center
+              </CardTitle>
+              <CardDescription>Issue official documentation for participants and winners</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input 
+                    placeholder="Search players by name..." 
+                    className="pl-10" 
+                    value={playerSearch}
+                    onChange={(e) => setPlayerSearch(e.target.value)}
+                  />
+                </div>
+                <div className="flex bg-slate-100 p-1 rounded-lg">
+                  {['singles', 'doubles', 'mixed'].map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setPlayerCategoryTab(cat)}
+                      className={cn(
+                        "px-4 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all",
+                        playerCategoryTab === cat ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700"
+                      )}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-slate-50/50">
+                      <TableHead>Player/Team Name</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Award / Achievement</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {players
+                      .filter(p => p.category === playerCategoryTab && p.name.toLowerCase().includes(playerSearch.toLowerCase()))
+                      .map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-bold text-slate-900">{p.name}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{p.isTeam ? 'TEAM UNIT' : 'INDIVIDUAL'}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">Performance</p>
+                            <p className="text-xs font-medium">Wins: {p.stats?.wins || 0} / Total: {p.stats?.matchesPlayed || 0}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <select 
+                            className={cn(
+                              "text-xs font-bold rounded-lg border-slate-200 h-9 px-3 w-40 transition-colors",
+                              p.achievement === 'Winner' ? "bg-gold/10 text-gold border-gold/20" : 
+                              p.achievement === 'Runner Up' ? "bg-slate-100 text-slate-600" :
+                              p.achievement === 'Third Place' ? "bg-amber-100 text-amber-800" : "bg-white"
+                            )}
+                            value={p.achievement || 'Participant'}
+                            onChange={(e) => updatePlayerAchievement(p.id!, e.target.value as any)}
+                          >
+                            <option value="Participant">Participation</option>
+                            <option value="Winner">Winner (1st)</option>
+                            <option value="Runner Up">Runner Up (2nd)</option>
+                            <option value="Third Place">3rd Place</option>
+                          </select>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setViewingCertificate(p)}
+                            className="bg-navy text-white hover:bg-navy/90 border-none shadow-sm"
+                          >
+                            <Award className="w-4 h-4 mr-2" /> Issue Certificate
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {players.filter(p => p.category === playerCategoryTab).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-10 text-slate-400 italic">
+                          No players registered for this category.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {viewingCertificate && (
+        <CertificateTemplate 
+          data={{
+            playerName: viewingCertificate.name,
+            tournamentName: tournament.name,
+            achievement: viewingCertificate.achievement || 'Participant',
+            date: tournament.date,
+            venue: tournament.venue,
+            category: viewingCertificate.category.toUpperCase(),
+            registryId: viewingCertificate.id ? `NBR-${viewingCertificate.id.substring(0, 8).toUpperCase()}` : undefined
+          }}
+          onClose={() => setViewingCertificate(null)}
+        />
+      )}
     </div>
   );
 }

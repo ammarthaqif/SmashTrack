@@ -23,6 +23,7 @@ export interface Player {
   teamName?: string;
   nationalId?: string; // SLN-XXXXX
   affiliation?: string; // School/Club/Region
+  achievement?: 'Winner' | 'Runner Up' | 'Third Place' | 'Participant';
   rank?: number;
   members?: string[];
   stats?: {
