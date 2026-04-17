@@ -39,6 +39,8 @@ export default function SuperadminDashboard({
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [isGeneratingLicense, setIsGeneratingLicense] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [lastGeneratedLicense, setLastGeneratedLicense] = useState<{email: string, pin: string} | null>(null);
 
   useEffect(() => {
     console.log("SuperadminDashboard: Setting up listeners...");
@@ -291,6 +293,8 @@ export default function SuperadminDashboard({
       console.log("SuperadminDashboard: Mail added successfully");
 
       addNotification?.(`License PIN ${newLicense.accessPin} generated and sent to ${email}`, "success");
+      setLastGeneratedLicense({ email, pin: newLicense.accessPin });
+      setShowSuccessDialog(true);
       setIsRegisterModalOpen(false);
       (e.target as HTMLFormElement).reset();
     } catch (error) {
@@ -608,7 +612,24 @@ export default function SuperadminDashboard({
                   {filteredLicenses.map((l) => (
                     <TableRow key={l.id}>
                       <TableCell className="font-medium">{l.organizerEmail}</TableCell>
-                      <TableCell><code className="bg-slate-100 px-2 py-1 rounded font-bold text-blue-600">{l.accessPin}</code></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <code className="bg-slate-100 px-2 py-1 rounded font-bold text-blue-600">
+                            {l.accessPin}
+                          </code>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-slate-400 hover:text-blue-600"
+                            onClick={() => {
+                              navigator.clipboard.writeText(l.accessPin);
+                              addNotification?.("PIN copied!", "success");
+                            }}
+                          >
+                            <Download className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
                       <TableCell className="capitalize">{l.type}</TableCell>
                       <TableCell className="text-slate-500 text-xs">
                         {new Date(l.validUntil).toLocaleDateString()}
@@ -938,7 +959,20 @@ export default function SuperadminDashboard({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 font-mono">
-                         <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{l.accessPin}</span>
+                         <div className="flex items-center gap-2">
+                            <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{l.accessPin}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-5 w-5 text-slate-400 hover:text-blue-600"
+                              onClick={() => {
+                                navigator.clipboard.writeText(l.accessPin);
+                                addNotification?.("PIN copied!", "success");
+                              }}
+                            >
+                              <Download className="w-3 h-3" />
+                            </Button>
+                         </div>
                       </TableCell>
                       <TableCell className="text-xs text-slate-400">
                         Expires {new Date(l.validUntil).toLocaleDateString()}
@@ -1157,6 +1191,87 @@ export default function SuperadminDashboard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+        <DialogContent className="sm:max-w-[500px] border-none shadow-2xl overflow-hidden p-0">
+          <div className="h-2 bg-gradient-to-r from-green-500 to-blue-500" />
+          <div className="p-8">
+            <DialogHeader className="text-center">
+              <div className="flex justify-center mb-4">
+                <div className="bg-green-100 p-3 rounded-full">
+                  <CheckCircle className="w-8 h-8 text-green-600" />
+                </div>
+              </div>
+              <DialogTitle className="text-2xl font-black text-slate-900">Registration Success!</DialogTitle>
+              <DialogDescription className="text-slate-500 pt-2">
+                A new license has been issued for <strong>{lastGeneratedLicense?.email}</strong>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-8 space-y-6">
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Access PIN (Activation Code)</label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <code className="flex-1 bg-white text-blue-600 text-2xl font-black p-4 rounded-xl border border-slate-200 tracking-widest text-center shadow-sm">
+                      {lastGeneratedLicense?.pin}
+                    </code>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-14 w-14 rounded-xl bg-white hover:bg-slate-50"
+                      onClick={() => {
+                        if (lastGeneratedLicense?.pin) {
+                          navigator.clipboard.writeText(lastGeneratedLicense.pin);
+                          addNotification?.("PIN copied to clipboard!", "success");
+                        }
+                      }}
+                    >
+                      <Download className="w-6 h-6 text-slate-400" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Dashboard Link</label>
+                  <div className="flex items-center gap-3 mt-1">
+                    <Input 
+                      readOnly 
+                      value={window.location.origin} 
+                      className="flex-1 bg-white h-12 rounded-xl text-slate-500 text-sm overflow-hidden" 
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-12 w-12 rounded-xl bg-white hover:bg-slate-50"
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.origin);
+                        addNotification?.("Link copied to clipboard!", "success");
+                      }}
+                    >
+                      <Search className="w-4 h-4 text-slate-400" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex gap-3">
+                <Info className="w-5 h-5 text-blue-500 shrink-0" />
+                <p className="text-[10px] text-blue-700 leading-relaxed">
+                  <strong>Note:</strong> We attempt to send an automated email via the Firebase Trigger Email service. If the organizer does not receive it, please manually provide them with the PIN above and the dashboard link.
+                </p>
+              </div>
+
+              <Button 
+                onClick={() => setShowSuccessDialog(false)} 
+                className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20"
+              >
+                Close & Continue
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
