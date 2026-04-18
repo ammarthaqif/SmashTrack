@@ -9,7 +9,7 @@ import { Input } from './components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Badge } from './components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table';
-import { Trophy, Users, Layout, Play, CheckCircle, QrCode, LogIn, LogOut, Plus, Trash2, Smartphone, Monitor, Search, FileUp, Download, Settings, ChevronDown, ChevronUp, Key, Printer, FileSpreadsheet, Edit2, ListOrdered, ExternalLink, ShieldCheck, MapPin, Calendar, User as UserIcon, Shield, Smartphone as Phone, ImagePlus, X, Database, Award } from 'lucide-react';
+import { Trophy, Users, Layout, Play, CheckCircle, QrCode, LogIn, LogOut, Plus, Trash2, Smartphone, Monitor, Search, FileUp, Download, Settings, ChevronDown, ChevronUp, ChevronRight, Key, Printer, FileSpreadsheet, Edit2, ListOrdered, ExternalLink, ShieldCheck, MapPin, Calendar, User as UserIcon, Shield, Smartphone as Phone, ImagePlus, X, Database, Award } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from './components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
@@ -337,6 +337,132 @@ const LandingView = ({ onStart }: { onStart: () => void }) => {
                 <p className="text-slate-500 leading-relaxed font-medium">{f.desc}</p>
               </Card>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Interface Snapshots */}
+      <section className="py-32 bg-stone/50 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-24 space-y-4">
+            <h2 className="text-5xl font-black text-navy font-heading">Seamless Across All Devices</h2>
+            <p className="text-slate-500 max-w-2xl mx-auto text-lg font-medium">Whether you're officiating on court or watching from the stands, NBR provides a unified, real-time experience.</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
+            {/* Umpire Preview */}
+            <motion.div 
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="space-y-8"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-navy text-white text-xs font-black uppercase tracking-widest border border-gold/30">
+                <Smartphone className="w-4 h-4 text-gold" />
+                Umpire Interface
+              </div>
+              <h3 className="text-4xl font-black text-navy leading-tight">Precision Scoring <br /><span className="text-gold">At Your Fingertips</span></h3>
+              <p className="text-slate-600 text-lg leading-relaxed">
+                Designed for speed and accuracy. Umpires can manage scores, sets, and side-switches with simple touch controls. All data syncs instantly to the cloud.
+              </p>
+              <div className="relative group max-w-sm mx-auto lg:mx-0">
+                <div className="absolute -inset-4 bg-navy/5 rounded-[3rem] blur-2xl group-hover:bg-gold/10 transition-colors" />
+                <div className="relative bg-slate-900 rounded-[2.5rem] p-3 shadow-2xl border-4 border-slate-800 aspect-[9/19] h-[500px]">
+                  <div className="w-full h-full bg-slate-50 rounded-[2rem] overflow-hidden flex flex-col">
+                    {/* Mock Umpire Screen */}
+                    <div className="bg-navy p-4 text-white flex justify-between items-center">
+                      <ChevronRight className="w-4 h-4 rotate-180" />
+                      <span className="text-[10px] font-black tracking-widest uppercase">Court 01</span>
+                      <Settings className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 p-4 flex flex-col gap-4">
+                      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex-1 flex flex-col justify-center items-center gap-1">
+                        <span className="text-[10px] uppercase font-black text-slate-400">Lee Z. J.</span>
+                        <span className="text-6xl font-black text-navy">21</span>
+                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">SET WIN</Badge>
+                      </div>
+                      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex-1 flex flex-col justify-center items-center gap-1 border-gold/30 ring-2 ring-gold/20">
+                        <span className="text-[10px] uppercase font-black text-slate-400 font-bold text-gold">Axelsen V.</span>
+                        <span className="text-6xl font-black text-navy">19</span>
+                        <div className="flex gap-1">
+                          <Badge variant="outline" className="text-[8px] h-4">S1: 21</Badge>
+                          <Badge variant="outline" className="text-[8px] h-4">S2: 19</Badge>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 mt-2">
+                        <Button size="sm" className="h-12 bg-navy rounded-xl text-xs font-bold uppercase tracking-wider">+1 Point</Button>
+                        <Button size="sm" variant="outline" className="h-12 border-slate-200 rounded-xl text-xs font-bold uppercase tracking-wider">Undo</Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Audience Preview */}
+            <motion.div 
+              initial={{ opacity: 0, x: 50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="space-y-8 lg:text-right"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gold text-navy text-xs font-black uppercase tracking-widest border border-navy/10 lg:ml-auto">
+                <Monitor className="w-4 h-4" />
+                Audience Portal
+              </div>
+              <h3 className="text-4xl font-black text-navy leading-tight">Live Broadcast <br /><span className="text-gold">Experience</span></h3>
+              <p className="text-slate-600 text-lg leading-relaxed">
+                Fans and athletes can follow every court in real-time. Full accessibility from any smartphone, tablet, or stadium screen display.
+              </p>
+              <div className="relative group max-w-lg mx-auto lg:ml-auto">
+                <div className="absolute -inset-4 bg-gold/5 rounded-[2rem] blur-2xl group-hover:bg-navy/5 transition-colors" />
+                <div className="relative bg-slate-900 rounded-[1.5rem] p-2 shadow-2xl border-2 border-slate-800 aspect-video w-full">
+                  <div className="w-full h-full bg-white rounded-lg overflow-hidden flex flex-col">
+                    {/* Mock Audience Screen */}
+                    <div className="bg-navy p-3 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-3 h-3 text-gold" />
+                        <span className="text-[8px] font-black uppercase tracking-tighter">Live Scoreboard</span>
+                      </div>
+                      <div className="flex gap-2 text-[8px] font-bold">
+                        <span className="text-gold">LIVE NOW</span>
+                        <span className="opacity-50 tracking-widest uppercase">NBR-2026</span>
+                      </div>
+                    </div>
+                    <div className="flex-1 p-3 bg-slate-50 space-y-2 overflow-hidden">
+                      {[
+                        { p1: "L. Chong Wei", p2: "Chen Long", s1: 18, s2: 20, court: "C01" },
+                        { p1: "T. Hidayat", p2: "Lin Dan", s1: 21, s2: 15, court: "C02", done: true },
+                        { p1: "Carolina M.", p2: "Tai T. Y.", s1: 0, s2: 0, court: "C03", status: "WARMUP" }
+                      ].map((m, i) => (
+                        <div key={i} className="bg-white p-2 rounded-md shadow-sm border border-slate-100 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 flex items-center justify-center bg-stone rounded-md text-[8px] font-black text-slate-400">{m.court}</span>
+                            <div className="flex flex-col">
+                              <span className="text-[9px] font-bold text-navy leading-none underline decoration-gold/30">{m.p1}</span>
+                              <span className="text-[9px] font-bold text-navy leading-none mt-1">{m.p2}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex flex-col items-center">
+                              <span className={cn("text-[10px] font-black leading-none", m.s1 > m.s2 ? "text-gold" : "text-slate-400")}>{m.s1}</span>
+                              <span className={cn("text-[10px] font-black leading-none mt-1", m.s2 > m.s1 ? "text-gold" : "text-slate-400")}>{m.s2}</span>
+                            </div>
+                            {m.done ? (
+                              <Badge className="bg-green-500 text-[6px] h-3 px-1 uppercase tracking-tighter text-white">Full Time</Badge>
+                            ) : m.status ? (
+                              <Badge variant="outline" className="text-[6px] h-3 px-1 uppercase tracking-tighter">{m.status}</Badge>
+                            ) : (
+                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shadow-sm shadow-red-500/50" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
         </div>
       </section>
