@@ -2998,7 +2998,7 @@ function PublicRegistrationView({
                 <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-300">
                   <div className="space-y-3">
                     <label className="text-sm font-black text-slate-700 uppercase tracking-wider ml-1">Team/Pair Name</label>
-                    <Input name="teamName" placeholder="e.g. Smash Bros" className="h-14 rounded-2xl border-2 border-slate-100 text-lg px-6" required />
+                    <Input name="teamName" placeholder="e.g. National Duo" className="h-14 rounded-2xl border-2 border-slate-100 text-lg px-6" required />
                   </div>
                   <div className="grid grid-cols-1 gap-6">
                     <div className="space-y-3">

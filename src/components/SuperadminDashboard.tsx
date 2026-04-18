@@ -133,7 +133,7 @@ export default function SuperadminDashboard({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `smash-track-backup-${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `nbr-registry-backup-${new Date().toISOString().split('T')[0]}.json`;
       link.click();
       URL.revokeObjectURL(url);
       addNotification?.("Database export completed successfully.", "success");
